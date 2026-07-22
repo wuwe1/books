@@ -1,6 +1,4 @@
 .DS_Store
-data/*.pdf
-data/*.epub
-data/*.mobi
+data/
 app/node_modules/
 app/dist/
