@@ -10,6 +10,24 @@ export interface NoteEntry {
   note: string
 }
 
+export interface Book {
+  slug: string
+  title: string
+  author?: string
+  pdf: string
+  notes: string
+  /** PDF 页码 = 正文页码 + pageOffset */
+  pageOffset: number
+  firstPage: number
+  lastPage: number
+}
+
+export async function loadBooks(): Promise<Book[]> {
+  const res = await fetch("/books.json", { cache: "no-store" })
+  const data = await res.json()
+  return data.books ?? []
+}
+
 function parseCSV(text: string): string[][] {
   text = text.replace(/^﻿/, "")
   const rows: string[][] = []
@@ -46,9 +64,11 @@ function parseCSV(text: string): string[][] {
   return rows
 }
 
-export async function loadNotes(): Promise<NoteEntry[]> {
-  const res = await fetch("/notes.csv", { cache: "no-store" })
+export async function loadNotes(path: string): Promise<NoteEntry[]> {
+  const res = await fetch("/" + path, { cache: "no-store" })
+  if (!res.ok) return []
   const rows = parseCSV(await res.text())
+  if (!rows.length) return []
   const head = rows[0].map((s) => s.trim().toLowerCase())
   const idx = {
     page: head.indexOf("page"),

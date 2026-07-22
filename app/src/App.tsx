@@ -5,6 +5,13 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -17,18 +24,17 @@ import {
   Check,
   ClipboardCopy,
   RotateCcw,
+  BookOpen,
 } from "lucide-react"
 import {
+  loadBooks,
   loadNotes,
   entryKey,
   NOTE_TYPES,
+  type Book,
   type NoteEntry,
   type NoteType,
 } from "@/lib/notes"
-
-const PAGE_OFFSET = 20 // PDF 页码 = 正文页码 + 20
-const MIN_PAGE = 1
-const MAX_PAGE = 306
 
 const TYPE_STYLES: Record<NoteType, string> = {
   多义: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
@@ -56,18 +62,69 @@ function useLocalStorage<T>(key: string, initial: T) {
 }
 
 export default function App() {
+  const [books, setBooks] = React.useState<Book[] | null>(null)
+  const [slug, setSlug] = useLocalStorage("bb.book", "")
+  const [dark, setDark] = useLocalStorage(
+    "bb.dark",
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  )
+
+  React.useEffect(() => {
+    loadBooks().then(setBooks)
+  }, [])
+
+  React.useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark)
+  }, [dark])
+
+  if (!books) return null
+  const book = books.find((b) => b.slug === slug) ?? books[0]
+  if (!book)
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">
+        books.json 里还没有登记任何书
+      </div>
+    )
+
+  return (
+    <Reader
+      key={book.slug}
+      book={book}
+      books={books}
+      onSwitchBook={setSlug}
+      dark={dark}
+      onToggleDark={() => setDark(!dark)}
+    />
+  )
+}
+
+function Reader({
+  book,
+  books,
+  onSwitchBook,
+  dark,
+  onToggleDark,
+}: {
+  book: Book
+  books: Book[]
+  onSwitchBook: (slug: string) => void
+  dark: boolean
+  onToggleDark: () => void
+}) {
   const viewerRef = React.useRef<PDFViewerHandle>(null)
   const [entries, setEntries] = React.useState<NoteEntry[]>([])
-  const [bookPage, setBookPage] = useLocalStorage("bb.page", 3)
+  const [bookPage, setBookPage] = useLocalStorage(
+    `bb.${book.slug}.page`,
+    book.firstPage
+  )
   const [search, setSearch] = React.useState("")
   const [activeTypes, setActiveTypes] = useLocalStorage<NoteType[]>(
     "bb.types",
     NOTE_TYPES
   )
-  const [known, setKnown] = useLocalStorage<string[]>("bb.known", [])
-  const [dark, setDark] = useLocalStorage(
-    "bb.dark",
-    window.matchMedia("(prefers-color-scheme: dark)").matches
+  const [known, setKnown] = useLocalStorage<string[]>(
+    `bb.${book.slug}.known`,
+    []
   )
   const [toast, setToast] = React.useState("")
   const knownSet = React.useMemo(() => new Set(known), [known])
@@ -75,12 +132,8 @@ export default function App() {
   const suppressSync = React.useRef(false)
 
   React.useEffect(() => {
-    loadNotes().then(setEntries)
-  }, [])
-
-  React.useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark)
-  }, [dark])
+    loadNotes(book.notes).then(setEntries)
+  }, [book.notes])
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -90,21 +143,26 @@ export default function App() {
   // 跳转：滚动 PDF 到对应页；onActivePageChange 会回写 bookPage
   const goTo = React.useCallback(
     (p: number) => {
-      const page = Math.min(Math.max(p, MIN_PAGE), MAX_PAGE)
+      const page = Math.min(Math.max(p, book.firstPage), book.lastPage)
       setBookPage(page)
       suppressSync.current = true
-      viewerRef.current?.scrollToPage(page + PAGE_OFFSET)
+      viewerRef.current?.scrollToPage(page + book.pageOffset)
       window.setTimeout(() => (suppressSync.current = false), 600)
     },
-    [setBookPage]
+    [book, setBookPage]
   )
 
   const onActivePageChange = React.useCallback(
     (pdfPage: number) => {
       if (suppressSync.current) return
-      setBookPage(Math.min(Math.max(pdfPage - PAGE_OFFSET, MIN_PAGE), MAX_PAGE))
+      setBookPage(
+        Math.min(
+          Math.max(pdfPage - book.pageOffset, book.firstPage),
+          book.lastPage
+        )
+      )
     },
-    [setBookPage]
+    [book, setBookPage]
   )
 
   React.useEffect(() => {
@@ -141,7 +199,7 @@ export default function App() {
     if (!known.length) return showToast("还没有标记任何词条")
     const words = known.map((k) => k.split("|").slice(1).join("|"))
     const text =
-      "这些我认识，请从 CSV 删除并抬高对应类别门槛：\n" +
+      `《${book.title}》里这些我认识，请从 ${book.notes} 删除并抬高对应类别门槛：\n` +
       words.map((w) => "- " + w).join("\n")
     await navigator.clipboard.writeText(text)
     showToast(`已复制 ${known.length} 条，可直接粘贴给 Claude`)
@@ -151,12 +209,28 @@ export default function App() {
     <div className="flex h-screen flex-col bg-background text-foreground">
       {/* header */}
       <header className="flex h-13 flex-none items-center gap-3 border-b px-4">
-        <div className="text-sm font-semibold tracking-tight whitespace-nowrap">
-          Inside the Black Box
-          <span className="ml-2 text-xs font-normal text-muted-foreground">
-            精读词条
-          </span>
-        </div>
+        <BookOpen className="size-4 flex-none text-muted-foreground" />
+        {books.length > 1 ? (
+          <Select value={book.slug} onValueChange={onSwitchBook}>
+            <SelectTrigger className="h-8 w-56 text-sm font-semibold">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {books.map((b) => (
+                <SelectItem key={b.slug} value={b.slug}>
+                  {b.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="text-sm font-semibold tracking-tight whitespace-nowrap">
+            {book.title}
+          </div>
+        )}
+        <span className="text-xs font-normal whitespace-nowrap text-muted-foreground">
+          精读词条
+        </span>
         <div className="ml-auto flex items-center gap-2">
           <Input
             value={search}
@@ -164,19 +238,27 @@ export default function App() {
             placeholder="搜索全部词条…"
             className="h-8 w-52"
           />
-          <Button variant="outline" size="icon-sm" onClick={() => goTo(bookPage - 1)}>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => goTo(bookPage - 1)}
+          >
             <ChevronLeft />
           </Button>
           <span className="text-xs whitespace-nowrap text-muted-foreground">
-            正文 <b className="text-foreground">{bookPage}</b> / {MAX_PAGE}
+            正文 <b className="text-foreground">{bookPage}</b> / {book.lastPage}
           </span>
-          <Button variant="outline" size="icon-sm" onClick={() => goTo(bookPage + 1)}>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => goTo(bookPage + 1)}
+          >
             <ChevronRight />
           </Button>
           <Input
             type="number"
-            min={MIN_PAGE}
-            max={MAX_PAGE}
+            min={book.firstPage}
+            max={book.lastPage}
             placeholder="页码"
             className="h-8 w-18"
             onKeyDown={(e) => {
@@ -190,7 +272,7 @@ export default function App() {
               }
             }}
           />
-          <Button variant="ghost" size="icon-sm" onClick={() => setDark(!dark)}>
+          <Button variant="ghost" size="icon-sm" onClick={onToggleDark}>
             {dark ? <Sun /> : <Moon />}
           </Button>
         </div>
@@ -201,7 +283,7 @@ export default function App() {
         <div className="min-w-0 flex-[1.4]">
           <PDFViewer
             ref={viewerRef}
-            src="/book.pdf"
+            src={"/" + book.pdf}
             className="h-full"
             showUpload={false}
             showDownload={false}
@@ -242,7 +324,11 @@ export default function App() {
             <div className="space-y-2.5 px-4 py-3">
               {visible.length === 0 && (
                 <div className="py-16 text-center text-[13px] text-muted-foreground">
-                  {q ? "没有匹配的词条" : "本页没有词条 —— 都在你水平线以下 🎉"}
+                  {q
+                    ? "没有匹配的词条"
+                    : entries.length === 0
+                      ? "这本书还没有词条 CSV"
+                      : "本页没有词条 —— 都在你水平线以下 🎉"}
                 </div>
               )}
               {visible.slice(0, 200).map((e) => (
@@ -253,7 +339,9 @@ export default function App() {
                   <div className="flex items-start gap-2">
                     <div
                       className={`flex-1 text-[13px] leading-snug break-words ${
-                        e.type === "难句" ? "font-medium italic" : "font-semibold"
+                        e.type === "难句"
+                          ? "font-medium italic"
+                          : "font-semibold"
                       }`}
                     >
                       {e.raw}
@@ -290,7 +378,9 @@ export default function App() {
                         认识 <Check className="inline size-3" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent>标记后隐藏，可导出清单发给 Claude</TooltipContent>
+                    <TooltipContent>
+                      标记后隐藏，可导出清单发给 Claude
+                    </TooltipContent>
                   </Tooltip>
                 </div>
               ))}
