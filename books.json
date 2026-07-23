@@ -6,9 +6,7 @@
       "author": "Rishi K. Narang",
       "pdf": "data/inside-the-black-box.pdf",
       "notes": "notes/inside-the-black-box.csv",
-      "pageOffset": 20,
-      "firstPage": 3,
-      "lastPage": 306
+      "pageOffset": 20
     }
   ]
 }

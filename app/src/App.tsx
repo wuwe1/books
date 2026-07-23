@@ -111,9 +111,10 @@ function Reader({
 }) {
   const viewerRef = React.useRef<PDFViewerHandle>(null)
   const [entries, setEntries] = React.useState<NoteEntry[]>([])
-  const [bookPage, setBookPage] = useLocalStorage(
+  const [numPages, setNumPages] = React.useState(0)
+  const [page, setPage] = useLocalStorage(
     `bb.${book.slug}.page`,
-    book.firstPage
+    book.pageOffset + 1
   )
   const [search, setSearch] = React.useState("")
   const [activeTypes, setActiveTypes] = useLocalStorage<NoteType[]>(
@@ -138,40 +139,35 @@ function Reader({
     window.setTimeout(() => setToast(""), 2200)
   }
 
-  // 跳转：滚动 PDF 到对应页；onActivePageChange 会回写 bookPage
+  // 跳转：滚动 PDF 到对应页；onActivePageChange 会回写 page
   const goTo = React.useCallback(
     (p: number) => {
-      const page = Math.min(Math.max(p, book.firstPage), book.lastPage)
-      setBookPage(page)
+      const next = Math.min(Math.max(p, 1), numPages || Infinity)
+      setPage(next)
       suppressSync.current = true
-      viewerRef.current?.scrollToPage(page + book.pageOffset)
+      viewerRef.current?.scrollToPage(next)
       window.setTimeout(() => (suppressSync.current = false), 600)
     },
-    [book, setBookPage]
+    [numPages, setPage]
   )
 
   const onActivePageChange = React.useCallback(
     (pdfPage: number) => {
       if (suppressSync.current) return
-      setBookPage(
-        Math.min(
-          Math.max(pdfPage - book.pageOffset, book.firstPage),
-          book.lastPage
-        )
-      )
+      setPage(pdfPage)
     },
-    [book, setBookPage]
+    [setPage]
   )
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === "INPUT") return
-      if (e.key === "ArrowLeft") goTo(bookPage - 1)
-      if (e.key === "ArrowRight") goTo(bookPage + 1)
+      if (e.key === "ArrowLeft") goTo(page - 1)
+      if (e.key === "ArrowRight") goTo(page + 1)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [bookPage, goTo])
+  }, [page, goTo])
 
   const q = search.trim().toLowerCase()
   const visible = React.useMemo(() => {
@@ -179,11 +175,11 @@ function Reader({
       ? entries.filter((e) =>
           `${e.raw} ${e.trans} ${e.note}`.toLowerCase().includes(q)
         )
-      : entries.filter((e) => e.page === bookPage)
+      : entries.filter((e) => e.page + book.pageOffset === page)
     return list.filter(
       (e) => activeSet.has(e.type) && !knownSet.has(entryKey(e))
     )
-  }, [entries, q, bookPage, activeSet, knownSet])
+  }, [entries, q, page, book.pageOffset, activeSet, knownSet])
 
   const toggleType = (t: NoteType) => {
     if (activeSet.has(t) && activeTypes.length === 1) setActiveTypes(NOTE_TYPES)
@@ -251,9 +247,8 @@ function Reader({
             className="h-full"
             showUpload={false}
             showDownload={false}
-            pageNumberOffset={book.pageOffset}
-            pageNumberTotal={book.lastPage}
             onActivePageChange={onActivePageChange}
+            onDocumentLoadSuccess={setNumPages}
           />
         </div>
         <Separator orientation="vertical" />
@@ -263,7 +258,7 @@ function Reader({
           <div className="flex-none border-b px-4 pt-3 pb-2.5">
             <div className="mb-2 flex items-baseline gap-2">
               <h2 className="text-[13px] font-semibold">
-                {q ? `搜索“${search.trim()}”` : `第 ${bookPage} 页词条`}
+                {q ? `搜索“${search.trim()}”` : "本页词条"}
               </h2>
               <span className="text-xs text-muted-foreground">
                 {visible.length ? `${visible.length} 条` : ""}
@@ -329,10 +324,10 @@ function Reader({
                       className="mt-1.5 text-[11px] text-muted-foreground hover:text-primary"
                       onClick={() => {
                         setSearch("")
-                        goTo(e.page)
+                        goTo(e.page + book.pageOffset)
                       }}
                     >
-                      p.{e.page} ↗
+                      p.{e.page + book.pageOffset} ↗
                     </button>
                   )}
                   <Tooltip>

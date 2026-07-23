@@ -4,7 +4,7 @@
 
 - `data/<slug>.pdf` — 书（整个 data/ 不进 git，绝不 push 书的内容到任何远端）；
 - `notes/<slug>.csv` — 词条表（进 git；列：`page,type,raw,translation,note`，type ∈ 生词/多义/词组/术语/难句/语法/文化，UTF-8 带 BOM）；
-- `books.json` — 书目登记（slug/title/author/pdf/notes/pageOffset/firstPage/lastPage；pageOffset = PDF 页码 − 正文页码）；
+- `books.json` — 书目登记（slug/title/author/pdf/notes/pageOffset；CSV 页码 + pageOffset = PDF 页码，即正文从 PDF 第 pageOffset+1 页开始）；
 - `app/` — 阅读器（读 books.json 自动列出所有书，无需改代码）。
 
 词条 CSV 是我们的共享知识库：它记录了我不会的东西和你对我水平的认知。开始任何工作前，先读目标书的 CSV 和其他书的 CSV（水平画像是跨书共享的）。

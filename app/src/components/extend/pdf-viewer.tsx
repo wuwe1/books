@@ -134,10 +134,6 @@ export type PDFViewerScrollAreaViewportResolver = (
 export type PDFViewerProps = {
   className?: string
   defaultZoom?: number
-  /** 工具栏页码显示偏移：显示页码 = PDF 页码 - offset（输入亦按显示页码理解） */
-  pageNumberOffset?: number
-  /** 工具栏显示的总页数（默认 numPages - pageNumberOffset） */
-  pageNumberTotal?: number
   fileName?: string
   resolveScrollAreaViewport?: PDFViewerScrollAreaViewportResolver
   showDownload?: boolean
@@ -667,20 +663,15 @@ function PDFViewerPageNumberControl({
   activePage,
   controlsDisabled,
   numPages,
-  pageNumberOffset = 0,
-  pageNumberTotal,
   onPageChange,
 }: {
   activePage: number
   controlsDisabled: boolean
   numPages: number
-  pageNumberOffset?: number
-  pageNumberTotal?: number
   onPageChange: (pageNumber: number) => void
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null)
-  const displayPage = numPages ? activePage - pageNumberOffset : 1
-  const displayTotal = pageNumberTotal ?? Math.max(numPages - pageNumberOffset, 0)
+  const displayPage = numPages ? activePage : 1
   const [isEditing, setIsEditing] = React.useState(false)
   const [draftPage, setDraftPage] = React.useState(() => String(displayPage))
 
@@ -701,14 +692,9 @@ function PDFViewerPageNumberControl({
 
       if (!Number.isInteger(parsedPage)) return
 
-      onPageChange(
-        Math.min(
-          Math.max(parsedPage + pageNumberOffset, 1),
-          Math.max(numPages, 1)
-        )
-      )
+      onPageChange(Math.min(Math.max(parsedPage, 1), Math.max(numPages, 1)))
     },
-    [numPages, pageNumberOffset, onPageChange]
+    [numPages, onPageChange]
   )
 
   return (
@@ -744,14 +730,14 @@ function PDFViewerPageNumberControl({
           aria-label={`Current page ${displayPage}. Edit page number`}
           disabled={controlsDisabled || !numPages}
           onClick={() => {
-            setDraftPage(String(Math.max(displayPage, 1)))
+            setDraftPage(String(displayPage))
             setIsEditing(true)
           }}
         >
-          {displayPage < 1 ? "扉页" : displayPage}
+          {displayPage}
         </Button>
       )}
-      <span>of {displayTotal || "–"}</span>
+      <span>of {numPages || "–"}</span>
     </div>
   )
 }
@@ -1009,8 +995,6 @@ function PDFViewerToolbar({
   downloadDisabled = controlsDisabled,
   isPreparingDownload = false,
   numPages,
-  pageNumberOffset,
-  pageNumberTotal,
   searchControl,
   showDownload,
   showRotateControls,
@@ -1029,8 +1013,6 @@ function PDFViewerToolbar({
   downloadDisabled?: boolean
   isPreparingDownload?: boolean
   numPages: number
-  pageNumberOffset?: number
-  pageNumberTotal?: number
   searchControl: React.ReactNode
   showDownload: boolean
   showRotateControls: boolean
@@ -1064,8 +1046,6 @@ function PDFViewerToolbar({
           activePage={activePage}
           controlsDisabled={controlsDisabled}
           numPages={numPages}
-          pageNumberOffset={pageNumberOffset}
-          pageNumberTotal={pageNumberTotal}
           onPageChange={onPageChange}
         />
       </div>
@@ -2120,8 +2100,6 @@ type PDFViewerInnerProps = {
   showToolbar: boolean
   showRotateControls: boolean
   showUpload: boolean
-  pageNumberOffset?: number
-  pageNumberTotal?: number
   toolbarActions?: React.ReactNode
   pageClassName?: (pageNumber: number) => string | undefined
   renderPageOverlay?: (props: PDFViewerPageOverlayProps) => React.ReactNode
@@ -2146,8 +2124,6 @@ function PDFViewerInner({
   showToolbar,
   showRotateControls,
   showUpload,
-  pageNumberOffset,
-  pageNumberTotal,
   toolbarActions,
   pageClassName,
   renderPageOverlay,
@@ -2602,8 +2578,6 @@ function PDFViewerInner({
           showUpload={showUpload}
           toolbarActions={toolbarActions}
           onDownload={handleDownload}
-          pageNumberOffset={pageNumberOffset}
-          pageNumberTotal={pageNumberTotal}
           onPageChange={scrollToPage}
           onRotate={rotateSelectedPages}
           onToggleSidebar={() => setSidebarOpen((open) => !open)}
@@ -2755,8 +2729,6 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
       className,
       defaultZoom = DEFAULT_ZOOM,
       fileName,
-      pageNumberOffset,
-      pageNumberTotal,
       resolveScrollAreaViewport,
       showDownload = true,
       showRotateControls = true,
@@ -2898,8 +2870,6 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
             showToolbar={showToolbar}
             showRotateControls={showRotateControls}
             showUpload={showUpload}
-            pageNumberOffset={pageNumberOffset}
-            pageNumberTotal={pageNumberTotal}
             toolbarActions={toolbarActions}
             pageClassName={pageClassName}
             renderPageOverlay={renderPageOverlay}

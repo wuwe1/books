@@ -16,10 +16,8 @@ export interface Book {
   author?: string
   pdf: string
   notes: string
-  /** PDF 页码 = 正文页码 + pageOffset */
+  /** 词条 CSV 里的页码 + pageOffset = PDF 页码（正文从 PDF 第 pageOffset+1 页开始） */
   pageOffset: number
-  firstPage: number
-  lastPage: number
 }
 
 export async function loadBooks(): Promise<Book[]> {
