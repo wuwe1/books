@@ -8,7 +8,6 @@ import {
 } from "@/components/extend/pdf-viewer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
@@ -552,12 +551,10 @@ function Reader({
             }}
           />
         </div>
-        <Separator orientation="vertical" />
-
         {/* notes panel */}
-        <div className="flex w-105 max-w-[46vw] flex-none flex-col">
-          <div className="flex-none border-b px-4 pt-3 pb-2.5">
-            <div className="mb-2 flex items-center gap-2">
+        <div className="flex w-105 max-w-[46vw] flex-none flex-col border-l">
+          <div className="flex h-12 flex-none items-center border-b px-4">
+            <div className="flex w-full items-center gap-2">
               <button
                 onClick={() => setView("notes")}
                 className={`text-[13px] font-semibold transition-colors ${
@@ -597,24 +594,24 @@ function Reader({
                   : ""}
               </span>
             </div>
-            {view === "notes" && (
-              <div className="flex flex-wrap gap-1.5">
-                {NOTE_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => toggleType(t)}
-                    className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-                      activeSet.has(t)
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
+          {view === "notes" && (
+            <div className="flex flex-none flex-wrap gap-1.5 border-b px-4 py-2">
+              {NOTE_TYPES.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => toggleType(t)}
+                  className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                    activeSet.has(t)
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-2.5 px-4 py-3">
