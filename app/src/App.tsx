@@ -17,8 +17,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
-  ChevronLeft,
-  ChevronRight,
   Moon,
   Sun,
   Check,
@@ -238,40 +236,6 @@ function Reader({
             placeholder="搜索全部词条…"
             className="h-8 w-52"
           />
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={() => goTo(bookPage - 1)}
-          >
-            <ChevronLeft />
-          </Button>
-          <span className="text-xs whitespace-nowrap text-muted-foreground">
-            正文 <b className="text-foreground">{bookPage}</b> / {book.lastPage}
-          </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={() => goTo(bookPage + 1)}
-          >
-            <ChevronRight />
-          </Button>
-          <Input
-            type="number"
-            min={book.firstPage}
-            max={book.lastPage}
-            placeholder="页码"
-            className="h-8 w-18"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const v = parseInt((e.target as HTMLInputElement).value, 10)
-                if (!isNaN(v)) {
-                  goTo(v)
-                  ;(e.target as HTMLInputElement).value = ""
-                  ;(e.target as HTMLInputElement).blur()
-                }
-              }
-            }}
-          />
           <Button variant="ghost" size="icon-sm" onClick={onToggleDark}>
             {dark ? <Sun /> : <Moon />}
           </Button>
@@ -287,6 +251,8 @@ function Reader({
             className="h-full"
             showUpload={false}
             showDownload={false}
+            pageNumberOffset={book.pageOffset}
+            pageNumberTotal={book.lastPage}
             onActivePageChange={onActivePageChange}
           />
         </div>
@@ -297,7 +263,7 @@ function Reader({
           <div className="flex-none border-b px-4 pt-3 pb-2.5">
             <div className="mb-2 flex items-baseline gap-2">
               <h2 className="text-[13px] font-semibold">
-                {q ? `搜索“${search.trim()}”` : "本页词条"}
+                {q ? `搜索“${search.trim()}”` : `第 ${bookPage} 页词条`}
               </h2>
               <span className="text-xs text-muted-foreground">
                 {visible.length ? `${visible.length} 条` : ""}
