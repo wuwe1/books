@@ -1103,10 +1103,7 @@ function PDFViewerToolbar({
                   </Button>
                 </ToolbarTooltip>
               </div>
-              <Separator
-                orientation="vertical"
-                className="mx-1 h-5 self-center"
-              />
+              <Separator orientation="vertical" className="mx-1" />
             </>
           ) : null}
           <div className="flex flex-none items-center gap-1">
