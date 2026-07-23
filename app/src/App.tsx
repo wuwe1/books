@@ -4,6 +4,7 @@ import {
   type PDFViewerHandle,
   type PDFViewerPageOverlayProps,
   type PDFViewerSelectionSnapshot,
+  type PDFViewerBookmarkItem,
 } from "@/components/extend/pdf-viewer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,6 +33,7 @@ import {
   BookmarkPlus,
   Trash2,
   Pencil,
+  List,
 } from "lucide-react"
 import {
   loadBooks,
@@ -96,6 +98,43 @@ function serializeSel(sel: PDFViewerSelectionSnapshot): MarkRects[] {
       size: { width: r.size.width, height: r.size.height },
     })),
   }))
+}
+
+function TocList({
+  items,
+  depth,
+  onJump,
+}: {
+  items: PDFViewerBookmarkItem[]
+  depth: number
+  onJump: (page: number) => void
+}) {
+  return (
+    <>
+      {items.map((item, i) => (
+        <React.Fragment key={`${depth}-${i}-${item.title}`}>
+          <button
+            disabled={item.pageNumber === null}
+            onClick={() => item.pageNumber && onJump(item.pageNumber)}
+            className={`flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-[13px] transition-colors hover:bg-muted ${
+              depth === 0 ? "font-semibold" : "text-muted-foreground"
+            }`}
+            style={{ paddingLeft: 8 + depth * 14 }}
+          >
+            <span className="min-w-0 flex-1">{item.title}</span>
+            {item.pageNumber !== null && (
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {item.pageNumber}
+              </span>
+            )}
+          </button>
+          {item.children.length > 0 && (
+            <TocList items={item.children} depth={depth + 1} onJump={onJump} />
+          )}
+        </React.Fragment>
+      ))}
+    </>
+  )
 }
 
 function useLocalStorage<T>(key: string, initial: T) {
@@ -180,7 +219,12 @@ function Reader({
     []
   )
   const [toast, setToast] = React.useState("")
-  const [view, setView] = React.useState<"notes" | "marks">("notes")
+  const [view, setView] = React.useState<"notes" | "marks" | "toc">("notes")
+  const [toc, setToc] = React.useState<PDFViewerBookmarkItem[]>([])
+  const onBookmarksLoaded = React.useCallback(
+    (items: PDFViewerBookmarkItem[]) => setToc(items),
+    []
+  )
   const [marks, setMarks] = React.useState<Mark[]>([])
   const [pendingSel, setPendingSel] =
     React.useState<PDFViewerSelectionSnapshot | null>(null)
@@ -435,6 +479,7 @@ function Reader({
             onActivePageChange={onActivePageChange}
             onDocumentLoadSuccess={setNumPages}
             onSelectionEnd={onSelectionEnd}
+            onBookmarksLoaded={onBookmarksLoaded}
             renderPageOverlay={({ pageNumber, scale }: PDFViewerPageOverlayProps) => {
               const pageIndex = pageNumber - 1
               const hl: React.ReactNode[] = []
@@ -528,6 +573,18 @@ function Reader({
                 <Bookmark className="size-3" /> 标记
                 {marks.length ? ` ${marks.length}` : ""}
               </button>
+              {toc.length > 0 && (
+                <button
+                  onClick={() => setView("toc")}
+                  className={`flex items-center gap-1 text-[13px] font-semibold transition-colors ${
+                    view === "toc"
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <List className="size-3" /> 目录
+                </button>
+              )}
               <span className="ml-auto text-xs text-muted-foreground">
                 {view === "notes" && visible.length
                   ? `${visible.length} 条`
@@ -555,6 +612,11 @@ function Reader({
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-2.5 px-4 py-3">
+              {view === "toc" && (
+                <div className="-mx-1 space-y-0.5">
+                  <TocList items={toc} depth={0} onJump={goTo} />
+                </div>
+              )}
               {view === "marks" && marks.length === 0 && (
                 <div className="py-16 text-center text-[13px] text-muted-foreground">
                   还没有标记 —— 选中一段文字按 M，或点顶栏书签按钮

@@ -17,6 +17,10 @@ import {
   InteractionManagerPluginPackage,
   PagePointerProvider,
 } from "@embedpdf/plugin-interaction-manager/react"
+import {
+  BookmarkPluginPackage,
+  useBookmarkCapability,
+} from "@embedpdf/plugin-bookmark/react"
 import { RenderLayer, RenderPluginPackage } from "@embedpdf/plugin-render/react"
 import { Rotate, RotatePluginPackage } from "@embedpdf/plugin-rotate/react"
 import {
@@ -131,6 +135,12 @@ export type PDFViewerScrollAreaViewportResolver = (
   container: HTMLDivElement
 ) => HTMLDivElement | null
 
+export type PDFViewerBookmarkItem = {
+  title: string
+  pageNumber: number | null
+  children: PDFViewerBookmarkItem[]
+}
+
 export type PDFViewerSelectionSnapshot = {
   pages: { pageIndex: number; rect: Rect; segmentRects: Rect[] }[]
   getText: () => Promise<string>
@@ -152,6 +162,7 @@ export type PDFViewerProps = {
   renderPageOverlay?: (props: PDFViewerPageOverlayProps) => React.ReactNode
   onActivePageChange?: (pageNumber: number) => void
   onSelectionEnd?: (selection: PDFViewerSelectionSnapshot | null) => void
+  onBookmarksLoaded?: (bookmarks: PDFViewerBookmarkItem[]) => void
   onDocumentLoadSuccess?: (numPages: number) => void
   onPdfUpload?: (file: File) => void
   onPagePointerDown?: (
@@ -2112,6 +2123,7 @@ type PDFViewerInnerProps = {
   renderPageOverlay?: (props: PDFViewerPageOverlayProps) => React.ReactNode
   onActivePageChange?: (pageNumber: number) => void
   onSelectionEnd?: (selection: PDFViewerSelectionSnapshot | null) => void
+  onBookmarksLoaded?: (bookmarks: PDFViewerBookmarkItem[]) => void
   onPdfUpload?: (file: File) => void
   onPagePointerDown?: PDFViewerProps["onPagePointerDown"]
   onPagePointerMove?: PDFViewerProps["onPagePointerMove"]
@@ -2137,6 +2149,7 @@ function PDFViewerInner({
   renderPageOverlay,
   onActivePageChange,
   onSelectionEnd,
+  onBookmarksLoaded,
   onPdfUpload,
   onPagePointerDown,
   onPagePointerMove,
@@ -2226,6 +2239,26 @@ function PDFViewerInner({
       offChange?.()
     }
   }, [selectionEndCapability, documentId, onSelectionEnd])
+
+  const { provides: bookmarkCapability } = useBookmarkCapability()
+
+  React.useEffect(() => {
+    if (!bookmarkCapability || !onBookmarksLoaded || !pdfDocument) return
+
+    const toItem = (b: any): PDFViewerBookmarkItem => ({
+      title: String(b?.title ?? ""),
+      pageNumber:
+        typeof b?.target?.destination?.pageIndex === "number"
+          ? b.target.destination.pageIndex + 1
+          : null,
+      children: (b?.children ?? []).map(toItem),
+    })
+
+    ;(bookmarkCapability.forDocument(documentId).getBookmarks() as any).wait(
+      (res: any) => onBookmarksLoaded((res?.bookmarks ?? []).map(toItem)),
+      () => onBookmarksLoaded([])
+    )
+  }, [bookmarkCapability, documentId, pdfDocument, onBookmarksLoaded])
 
   React.useEffect(() => {
     if (activePage < 1 || numPages < 1) return
@@ -2785,6 +2818,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
       renderPageOverlay,
       onActivePageChange,
       onSelectionEnd,
+      onBookmarksLoaded,
       onDocumentLoadSuccess,
       onPdfUpload,
       onPagePointerDown,
@@ -2858,6 +2892,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
         maxZoom: ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1],
       }),
       createPluginRegistration(RotatePluginPackage),
+      createPluginRegistration(BookmarkPluginPackage),
     ])
 
     if (engineError) {
@@ -2921,6 +2956,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
             renderPageOverlay={renderPageOverlay}
             onActivePageChange={onActivePageChange}
             onSelectionEnd={onSelectionEnd}
+            onBookmarksLoaded={onBookmarksLoaded}
             onDocumentLoadSuccess={onDocumentLoadSuccess}
             onPdfUpload={onPdfUpload}
             onPagePointerDown={onPagePointerDown}
