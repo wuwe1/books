@@ -691,7 +691,7 @@ function Reader({
                       {e.raw}
                     </div>
                     <span
-                      className={`mt-0.5 flex-none rounded px-1.5 py-px text-[10px] font-medium ${TYPE_STYLES[e.type] ?? "bg-muted"}`}
+                      className={`mt-0.5 flex-none rounded px-1.5 py-px text-[10px] font-medium transition-opacity group-hover:opacity-0 ${TYPE_STYLES[e.type] ?? "bg-muted"}`}
                     >
                       {e.type}
                     </span>
