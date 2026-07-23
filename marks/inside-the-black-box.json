@@ -33,5 +33,70 @@
       }
     ],
     "createdAt": "2026-07-23T07:12:20.680Z"
+  },
+  {
+    "id": "mrx72wfc",
+    "page": 31,
+    "csvPage": 11,
+    "text": "This is not because the systematic trader is somehow a better\r\nperson than the discretionary trader, but rather because the systematic trader\r\nis able to make this rational decision at a time when there is no pressure,\r\nthereby obviating the need to exercise discipline at a time when most people\r\nwould find it extraordinarily challenging",
+    "color": "yellow",
+    "rects": [
+      {
+        "pageIndex": 30,
+        "rects": [
+          {
+            "origin": {
+              "x": 113,
+              "y": 90
+            },
+            "size": {
+              "width": 265,
+              "height": 11
+            }
+          },
+          {
+            "origin": {
+              "x": 54,
+              "y": 102
+            },
+            "size": {
+              "width": 324,
+              "height": 11
+            }
+          },
+          {
+            "origin": {
+              "x": 54,
+              "y": 114
+            },
+            "size": {
+              "width": 324,
+              "height": 11
+            }
+          },
+          {
+            "origin": {
+              "x": 54,
+              "y": 126
+            },
+            "size": {
+              "width": 324,
+              "height": 11
+            }
+          },
+          {
+            "origin": {
+              "x": 54,
+              "y": 138
+            },
+            "size": {
+              "width": 176,
+              "height": 11
+            }
+          }
+        ]
+      }
+    ],
+    "createdAt": "2026-07-23T07:33:29.640Z"
   }
 ]
