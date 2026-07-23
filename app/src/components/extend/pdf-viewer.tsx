@@ -1044,8 +1044,8 @@ function PDFViewerToolbar({
   onZoomChange: (zoomLevel: number) => void
 }) {
   return (
-    <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b bg-background px-3 py-2">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+    <div className="flex h-12 flex-nowrap items-center justify-between gap-2 overflow-x-auto border-b bg-background px-3">
+      <div className="flex min-w-0 flex-nowrap items-center gap-2">
         <TooltipProvider>
           <ToolbarTooltip label="Toggle thumbnails">
             <Button
@@ -1068,7 +1068,7 @@ function PDFViewerToolbar({
         />
       </div>
       <TooltipProvider>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
+        <div className="flex min-w-0 flex-nowrap items-center justify-end gap-1">
           {showRotateControls ? (
             <>
               <div className="flex flex-none items-center gap-1">
@@ -1105,7 +1105,7 @@ function PDFViewerToolbar({
               </div>
               <Separator
                 orientation="vertical"
-                className="mx-1 h-4 self-center"
+                className="mx-1 h-5 self-center"
               />
             </>
           ) : null}

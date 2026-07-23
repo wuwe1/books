@@ -1,1 +1,37 @@
-[]
+[
+  {
+    "id": "mrx6bpag",
+    "page": 28,
+    "csvPage": 8,
+    "text": "All this defining leads to a lot of deep thought about exactly what one’s\r\nstrategy is, how to implement it, and so on",
+    "color": "yellow",
+    "rects": [
+      {
+        "pageIndex": 27,
+        "rects": [
+          {
+            "origin": {
+              "x": 72,
+              "y": 522
+            },
+            "size": {
+              "width": 306,
+              "height": 11
+            }
+          },
+          {
+            "origin": {
+              "x": 54,
+              "y": 534
+            },
+            "size": {
+              "width": 189,
+              "height": 11
+            }
+          }
+        ]
+      }
+    ],
+    "createdAt": "2026-07-23T07:12:20.680Z"
+  }
+]
