@@ -195,6 +195,25 @@ function findRawSegs(idx: PageTextIndex, raw: string): UnderlineSeg[] {
 }
 
 /**
+ * 按页内出现位置（先行后列）给词条排序，返回 entry 下标的排列。
+ * 找不到原文的词条排在最后，保持原有相对顺序。
+ */
+export function readingOrder(segsByEntry: UnderlineSeg[][]): number[] {
+  return segsByEntry
+    .map((_, i) => i)
+    .sort((a, b) => {
+      const ra = segsByEntry[a][0]
+      const rb = segsByEntry[b][0]
+      if (!ra && !rb) return a - b
+      if (!ra) return 1
+      if (!rb) return -1
+      const dy = ra.lineY - rb.lineY
+      if (Math.abs(dy) > 2) return dy
+      return ra.x - rb.x
+    })
+}
+
+/**
  * 给一页上的一组词条原文定位。返回数组与 raws 一一对应，
  * 每项是该词条在页内的下划线矩形（可能多行/多处，找不到则为空）。
  */

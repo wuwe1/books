@@ -43,7 +43,11 @@ import {
   type NoteEntry,
   type NoteType,
 } from "@/lib/notes"
-import { findEntryUnderlines, type UnderlineSeg } from "@/lib/underline"
+import {
+  findEntryUnderlines,
+  readingOrder,
+  type UnderlineSeg,
+} from "@/lib/underline"
 
 const TYPE_STYLES: Record<NoteType, string> = {
   多义: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
@@ -119,6 +123,12 @@ function UnderlineLayer({
 }) {
   const [segsByEntry, setSegsByEntry] = React.useState<UnderlineSeg[][]>([])
   const [hover, setHover] = React.useState(-1)
+  // 词条编号按页内出现顺序（与右侧卡片排序一致），不是 CSV 行序
+  const numOf = React.useMemo(() => {
+    const nums: number[] = []
+    readingOrder(segsByEntry).forEach((ei, pos) => (nums[ei] = pos + 1))
+    return nums
+  }, [segsByEntry])
   React.useEffect(() => {
     setHover(-1)
     if (!entries.length) {
@@ -179,7 +189,7 @@ function UnderlineLayer({
                     transform: "translate(-115%, -15%)",
                   }}
                 >
-                  {ei + 1}
+                  {numOf[ei]}
                 </div>
               )}
             </React.Fragment>
@@ -508,6 +518,34 @@ function Reader({
     return m
   }, [entries, activeSet, knownSet, book.pageOffset])
 
+  // 当前页词条的页内出现顺序（entryKey → 序号），与下划线气泡编号同源
+  const [pageRank, setPageRank] = React.useState<Map<string, number>>(
+    () => new Map()
+  )
+  React.useEffect(() => {
+    const list = entriesByPdfPage.get(page) ?? []
+    if (!list.length) {
+      setPageRank(new Map())
+      return
+    }
+    let alive = true
+    findEntryUnderlines(
+      "/" + book.pdf,
+      page - 1,
+      list.map((e) => e.raw)
+    )
+      .then((r) => {
+        if (!alive) return
+        const m = new Map<string, number>()
+        readingOrder(r).forEach((ei, pos) => m.set(entryKey(list[ei]), pos))
+        setPageRank(m)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [entriesByPdfPage, page, book.pdf])
+
   const q = search.trim().toLowerCase()
   const visible = React.useMemo(() => {
     const list = q
@@ -515,10 +553,16 @@ function Reader({
           `${e.raw} ${e.trans} ${e.note}`.toLowerCase().includes(q)
         )
       : entries.filter((e) => e.page + book.pageOffset === page)
-    return list.filter(
+    const filtered = list.filter(
       (e) => activeSet.has(e.type) && !knownSet.has(entryKey(e))
     )
-  }, [entries, q, page, book.pageOffset, activeSet, knownSet])
+    if (q) return filtered
+    return [...filtered].sort(
+      (a, b) =>
+        (pageRank.get(entryKey(a)) ?? Infinity) -
+        (pageRank.get(entryKey(b)) ?? Infinity)
+    )
+  }, [entries, q, page, book.pageOffset, activeSet, knownSet, pageRank])
 
   const toggleType = (t: NoteType) => {
     if (activeSet.has(t) && activeTypes.length === 1) setActiveTypes(NOTE_TYPES)
