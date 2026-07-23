@@ -521,7 +521,13 @@ function Reader({
                           8,
                         transform: "translateX(-50%)",
                       }}
-                      onPointerDown={(e: React.PointerEvent) =>
+                      onPointerDownCapture={(e: React.PointerEvent) =>
+                        e.stopPropagation()
+                      }
+                      onMouseDownCapture={(e: React.MouseEvent) =>
+                        e.stopPropagation()
+                      }
+                      onPointerUpCapture={(e: React.PointerEvent) =>
                         e.stopPropagation()
                       }
                     >

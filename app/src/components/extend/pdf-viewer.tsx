@@ -2245,12 +2245,13 @@ function PDFViewerInner({
   React.useEffect(() => {
     if (!bookmarkCapability || !onBookmarksLoaded || !pdfDocument) return
 
+    const targetPage = (b: any): number | null => {
+      const dest = b?.target?.destination ?? b?.target?.action?.destination
+      return typeof dest?.pageIndex === "number" ? dest.pageIndex + 1 : null
+    }
     const toItem = (b: any): PDFViewerBookmarkItem => ({
       title: String(b?.title ?? ""),
-      pageNumber:
-        typeof b?.target?.destination?.pageIndex === "number"
-          ? b.target.destination.pageIndex + 1
-          : null,
+      pageNumber: targetPage(b),
       children: (b?.children ?? []).map(toItem),
     })
 
