@@ -43,6 +43,7 @@ import {
   type NoteEntry,
   type NoteType,
 } from "@/lib/notes"
+import { findEntryUnderlines, type UnderlineSeg } from "@/lib/underline"
 
 const TYPE_STYLES: Record<NoteType, string> = {
   多义: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
@@ -97,6 +98,58 @@ function serializeSel(sel: PDFViewerSelectionSnapshot): MarkRects[] {
       size: { width: r.size.width, height: r.size.height },
     })),
   }))
+}
+
+const NO_ENTRIES: NoteEntry[] = []
+
+// 给本页有词条的原文画下划线（按 raw 在 PDF 文本里定位）
+function UnderlineLayer({
+  src,
+  pageNumber,
+  scale,
+  entries,
+}: {
+  src: string
+  pageNumber: number
+  scale: number
+  entries: NoteEntry[]
+}) {
+  const [segs, setSegs] = React.useState<UnderlineSeg[]>([])
+  React.useEffect(() => {
+    if (!entries.length) {
+      setSegs([])
+      return
+    }
+    let alive = true
+    findEntryUnderlines(
+      src,
+      pageNumber - 1,
+      entries.map((e) => e.raw)
+    )
+      .then((r) => {
+        if (alive) setSegs(r.flat())
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [src, pageNumber, entries])
+  return (
+    <>
+      {segs.map((s, i) => (
+        <div
+          key={i}
+          className="pointer-events-none absolute"
+          style={{
+            left: s.x * scale,
+            top: (s.y + s.height) * scale - 1,
+            width: s.width * scale,
+            borderBottom: "2px dotted rgba(59, 130, 246, 0.65)",
+          }}
+        />
+      ))}
+    </>
+  )
 }
 
 function TocList({
@@ -387,6 +440,19 @@ function Reader({
     return () => window.removeEventListener("keydown", onKey)
   }, [page, goTo, openMarkDraft])
 
+  // PDF 页码 → 该页要画下划线的词条（与右侧面板同一套类型/认识过滤）
+  const entriesByPdfPage = React.useMemo(() => {
+    const m = new Map<number, NoteEntry[]>()
+    for (const e of entries) {
+      if (!activeSet.has(e.type) || knownSet.has(entryKey(e))) continue
+      const p = e.page + book.pageOffset
+      const list = m.get(p)
+      if (list) list.push(e)
+      else m.set(p, [e])
+    }
+    return m
+  }, [entries, activeSet, knownSet, book.pageOffset])
+
   const q = search.trim().toLowerCase()
   const visible = React.useMemo(() => {
     const list = q
@@ -507,6 +573,12 @@ function Reader({
               const showBar = tail && tail.pageIndex === pageIndex && !markDraft
               return (
                 <>
+                  <UnderlineLayer
+                    src={"/" + book.pdf}
+                    pageNumber={pageNumber}
+                    scale={scale}
+                    entries={entriesByPdfPage.get(pageNumber) ?? NO_ENTRIES}
+                  />
                   {hl}
                   {showBar && (
                     <div
