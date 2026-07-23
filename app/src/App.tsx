@@ -23,6 +23,9 @@ import {
   ClipboardCopy,
   RotateCcw,
   BookOpen,
+  Bookmark,
+  BookmarkPlus,
+  Trash2,
 } from "lucide-react"
 import {
   loadBooks,
@@ -42,6 +45,15 @@ const TYPE_STYLES: Record<NoteType, string> = {
   难句: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
   语法: "bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300",
   文化: "bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
+}
+
+interface Mark {
+  id: string
+  page: number
+  csvPage: number
+  text?: string
+  note?: string
+  createdAt: string
 }
 
 function useLocalStorage<T>(key: string, initial: T) {
@@ -126,6 +138,12 @@ function Reader({
     []
   )
   const [toast, setToast] = React.useState("")
+  const [view, setView] = React.useState<"notes" | "marks">("notes")
+  const [marks, setMarks] = React.useState<Mark[]>([])
+  const [markDraft, setMarkDraft] = React.useState<{
+    text: string
+    note: string
+  } | null>(null)
   const knownSet = React.useMemo(() => new Set(known), [known])
   const activeSet = React.useMemo(() => new Set(activeTypes), [activeTypes])
   const suppressSync = React.useRef(false)
@@ -133,6 +151,17 @@ function Reader({
   React.useEffect(() => {
     loadNotes(book.notes).then(setEntries)
   }, [book.notes])
+
+  const loadMarks = React.useCallback(() => {
+    fetch(`/api/marks?slug=${book.slug}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setMarks)
+      .catch(() => {})
+  }, [book.slug])
+
+  React.useEffect(() => {
+    loadMarks()
+  }, [loadMarks])
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -159,15 +188,63 @@ function Reader({
     [setPage]
   )
 
+  const openMarkDraft = React.useCallback(() => {
+    const sel = window.getSelection()?.toString().trim() ?? ""
+    setMarkDraft({ text: sel, note: "" })
+  }, [])
+
+  const saveMark = async () => {
+    if (!markDraft) return
+    await fetch("/api/marks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slug: book.slug,
+        page,
+        csvPage: page - book.pageOffset,
+        text: markDraft.text || undefined,
+        note: markDraft.note.trim() || undefined,
+      }),
+    }).catch(() => {})
+    setMarkDraft(null)
+    loadMarks()
+    showToast(`已标记 p.${page}`)
+  }
+
+  const deleteMark = async (id: string) => {
+    await fetch(`/api/marks?slug=${book.slug}&id=${id}`, {
+      method: "DELETE",
+    }).catch(() => {})
+    loadMarks()
+  }
+
+  // 阅读进度落盘（marks/progress.json），停留 2 秒才算
+  React.useEffect(() => {
+    const t = window.setTimeout(() => {
+      fetch("/api/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: book.slug,
+          page,
+          csvPage: page - book.pageOffset,
+        }),
+      }).catch(() => {})
+    }, 2000)
+    return () => window.clearTimeout(t)
+  }, [book.slug, book.pageOffset, page])
+
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === "INPUT") return
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === "INPUT" || tag === "TEXTAREA") return
       if (e.key === "ArrowLeft") goTo(page - 1)
       if (e.key === "ArrowRight") goTo(page + 1)
+      if (e.key === "m" || e.key === "M") openMarkDraft()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [page, goTo])
+  }, [page, goTo, openMarkDraft])
 
   const q = search.trim().toLowerCase()
   const visible = React.useMemo(() => {
@@ -232,6 +309,16 @@ function Reader({
             placeholder="搜索全部词条…"
             className="h-8 w-52"
           />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon-sm" onClick={openMarkDraft}>
+                <BookmarkPlus />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              标记本页（先选中文字可一并记录）· 快捷键 M
+            </TooltipContent>
+          </Tooltip>
           <Button variant="ghost" size="icon-sm" onClick={onToggleDark}>
             {dark ? <Sun /> : <Moon />}
           </Button>
@@ -256,34 +343,96 @@ function Reader({
         {/* notes panel */}
         <div className="flex w-105 max-w-[46vw] flex-none flex-col">
           <div className="flex-none border-b px-4 pt-3 pb-2.5">
-            <div className="mb-2 flex items-baseline gap-2">
-              <h2 className="text-[13px] font-semibold">
+            <div className="mb-2 flex items-center gap-2">
+              <button
+                onClick={() => setView("notes")}
+                className={`text-[13px] font-semibold transition-colors ${
+                  view === "notes"
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
                 {q ? `搜索“${search.trim()}”` : "本页词条"}
-              </h2>
-              <span className="text-xs text-muted-foreground">
-                {visible.length ? `${visible.length} 条` : ""}
+              </button>
+              <button
+                onClick={() => setView("marks")}
+                className={`flex items-center gap-1 text-[13px] font-semibold transition-colors ${
+                  view === "marks"
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Bookmark className="size-3" /> 标记
+                {marks.length ? ` ${marks.length}` : ""}
+              </button>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {view === "notes" && visible.length
+                  ? `${visible.length} 条`
+                  : ""}
               </span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {NOTE_TYPES.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => toggleType(t)}
-                  className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-                    activeSet.has(t)
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+            {view === "notes" && (
+              <div className="flex flex-wrap gap-1.5">
+                {NOTE_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => toggleType(t)}
+                    className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                      activeSet.has(t)
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-2.5 px-4 py-3">
-              {visible.length === 0 && (
+              {view === "marks" && marks.length === 0 && (
+                <div className="py-16 text-center text-[13px] text-muted-foreground">
+                  还没有标记 —— 选中一段文字按 M，或点顶栏书签按钮
+                </div>
+              )}
+              {view === "marks" &&
+                [...marks]
+                  .sort((a, b) => a.page - b.page)
+                  .map((m) => (
+                    <div
+                      key={m.id}
+                      className="group relative rounded-lg border bg-card p-3 shadow-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="text-[11px] text-muted-foreground hover:text-primary"
+                          onClick={() => goTo(m.page)}
+                        >
+                          p.{m.page} ↗
+                        </button>
+                        <span className="text-[10px] text-muted-foreground">
+                          {m.createdAt.slice(0, 10)}
+                        </span>
+                      </div>
+                      {m.text && (
+                        <div className="mt-1.5 border-l-2 pl-2 text-[13px] leading-snug italic">
+                          {m.text}
+                        </div>
+                      )}
+                      {m.note && (
+                        <div className="mt-1.5 text-[13px]">{m.note}</div>
+                      )}
+                      <button
+                        onClick={() => deleteMark(m.id)}
+                        className="absolute top-2 right-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-destructive"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+              {view === "notes" && visible.length === 0 && (
                 <div className="py-16 text-center text-[13px] text-muted-foreground">
                   {q
                     ? "没有匹配的词条"
@@ -292,7 +441,8 @@ function Reader({
                       : "本页没有词条 —— 都在你水平线以下 🎉"}
                 </div>
               )}
-              {visible.slice(0, 200).map((e) => (
+              {view === "notes" &&
+                visible.slice(0, 200).map((e) => (
                 <div
                   key={entryKey(e)}
                   className="group relative rounded-lg border bg-card p-3 shadow-xs"
@@ -366,6 +516,42 @@ function Reader({
           </div>
         </div>
       </div>
+
+      {markDraft && (
+        <div className="fixed top-16 right-6 z-50 w-80 rounded-xl border bg-popover p-3 shadow-lg">
+          <div className="mb-2 text-[13px] font-semibold">标记 p.{page}</div>
+          {markDraft.text ? (
+            <div className="mb-2 max-h-24 overflow-y-auto border-l-2 pl-2 text-xs leading-relaxed text-muted-foreground italic">
+              {markDraft.text}
+            </div>
+          ) : (
+            <div className="mb-2 text-xs text-muted-foreground">
+              未选中文字，仅标记整页
+            </div>
+          )}
+          <textarea
+            autoFocus
+            value={markDraft.note}
+            onChange={(e) =>
+              setMarkDraft({ ...markDraft, note: e.target.value })
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveMark()
+              if (e.key === "Escape") setMarkDraft(null)
+            }}
+            placeholder="为什么好？（可空）…"
+            className="mb-2 h-16 w-full resize-none rounded-md border bg-background p-2 text-[13px] outline-none focus:border-ring"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="xs" onClick={() => setMarkDraft(null)}>
+              取消
+            </Button>
+            <Button size="xs" onClick={saveMark}>
+              保存 ⌘↩
+            </Button>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-foreground px-4 py-1.5 text-xs text-background shadow-lg">
