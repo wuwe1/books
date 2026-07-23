@@ -1169,23 +1169,17 @@ function PDFViewerToolbar({
               </Button>
             </ToolbarTooltip>
           </div>
-          <Separator orientation="vertical" className="mx-1 h-4 self-center" />
+          <Separator orientation="vertical" className="mx-1" />
           {searchControl}
           {toolbarActions ? (
             <>
-              <Separator
-                orientation="vertical"
-                className="mx-1 h-4 self-center"
-              />
+              <Separator orientation="vertical" className="mx-1" />
               {toolbarActions}
             </>
           ) : null}
           {showDownload || showUpload ? (
             <>
-              <Separator
-                orientation="vertical"
-                className="mx-1 h-4 self-center"
-              />
+              <Separator orientation="vertical" className="mx-1" />
               <PDFViewerFileActionsMenu
                 downloadDisabled={downloadDisabled}
                 isPreparingDownload={isPreparingDownload}
