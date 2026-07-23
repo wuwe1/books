@@ -1,5 +1,10 @@
 import * as React from "react"
-import { PDFViewer, type PDFViewerHandle } from "@/components/extend/pdf-viewer"
+import {
+  PDFViewer,
+  type PDFViewerHandle,
+  type PDFViewerPageOverlayProps,
+  type PDFViewerSelectionSnapshot,
+} from "@/components/extend/pdf-viewer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
@@ -26,6 +31,7 @@ import {
   Bookmark,
   BookmarkPlus,
   Trash2,
+  Pencil,
 } from "lucide-react"
 import {
   loadBooks,
@@ -47,13 +53,49 @@ const TYPE_STYLES: Record<NoteType, string> = {
   文化: "bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
 }
 
+type MarkColor = "yellow" | "green" | "red"
+
+interface MarkRects {
+  pageIndex: number
+  rects: {
+    origin: { x: number; y: number }
+    size: { width: number; height: number }
+  }[]
+}
+
 interface Mark {
   id: string
   page: number
   csvPage: number
   text?: string
   note?: string
+  color?: MarkColor
+  rects?: MarkRects[]
   createdAt: string
+}
+
+const HIGHLIGHT_FILL: Record<MarkColor, string> = {
+  yellow: "rgba(253, 224, 71, 0.45)",
+  green: "rgba(134, 239, 172, 0.5)",
+  red: "rgba(252, 165, 165, 0.5)",
+}
+
+const COLOR_DOT: Record<MarkColor, string> = {
+  yellow: "bg-yellow-300",
+  green: "bg-green-300",
+  red: "bg-red-300",
+}
+
+const MARK_COLORS: MarkColor[] = ["yellow", "green", "red"]
+
+function serializeSel(sel: PDFViewerSelectionSnapshot): MarkRects[] {
+  return sel.pages.map((p) => ({
+    pageIndex: p.pageIndex,
+    rects: p.segmentRects.map((r) => ({
+      origin: { x: r.origin.x, y: r.origin.y },
+      size: { width: r.size.width, height: r.size.height },
+    })),
+  }))
 }
 
 function useLocalStorage<T>(key: string, initial: T) {
@@ -140,9 +182,14 @@ function Reader({
   const [toast, setToast] = React.useState("")
   const [view, setView] = React.useState<"notes" | "marks">("notes")
   const [marks, setMarks] = React.useState<Mark[]>([])
+  const [pendingSel, setPendingSel] =
+    React.useState<PDFViewerSelectionSnapshot | null>(null)
   const [markDraft, setMarkDraft] = React.useState<{
     text: string
     note: string
+    color: MarkColor
+    page: number
+    rects?: MarkRects[]
   } | null>(null)
   const knownSet = React.useMemo(() => new Set(known), [known])
   const activeSet = React.useMemo(() => new Set(activeTypes), [activeTypes])
@@ -188,27 +235,78 @@ function Reader({
     [setPage]
   )
 
-  const openMarkDraft = React.useCallback(() => {
-    const sel = window.getSelection()?.toString().trim() ?? ""
-    setMarkDraft({ text: sel, note: "" })
-  }, [])
+  const onSelectionEnd = React.useCallback(
+    (sel: PDFViewerSelectionSnapshot | null) => setPendingSel(sel),
+    []
+  )
+
+  const saveMarkRecord = React.useCallback(
+    async (record: {
+      page: number
+      text?: string
+      note?: string
+      color?: MarkColor
+      rects?: MarkRects[]
+    }) => {
+      await fetch("/api/marks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: book.slug,
+          csvPage: record.page - book.pageOffset,
+          ...record,
+        }),
+      }).catch(() => {})
+      loadMarks()
+    },
+    [book.slug, book.pageOffset, loadMarks]
+  )
+
+  // 选区工具条：点颜色 = 直接保存高亮
+  const highlightSel = async (color: MarkColor) => {
+    if (!pendingSel) return
+    const sel = pendingSel
+    const text = await sel.getText()
+    await saveMarkRecord({
+      page: sel.pages[0].pageIndex + 1,
+      text: text.trim() || undefined,
+      color,
+      rects: serializeSel(sel),
+    })
+    sel.clear()
+    setPendingSel(null)
+    showToast("已高亮")
+  }
+
+  // 编辑图标 / M 键：打开备注表单（有选区带选区，无选区标整页）
+  const openMarkDraft = React.useCallback(async () => {
+    if (pendingSel) {
+      const text = await pendingSel.getText()
+      setMarkDraft({
+        text: text.trim(),
+        note: "",
+        color: "yellow",
+        page: pendingSel.pages[0].pageIndex + 1,
+        rects: serializeSel(pendingSel),
+      })
+    } else {
+      setMarkDraft({ text: "", note: "", color: "yellow", page })
+    }
+  }, [pendingSel, page])
 
   const saveMark = async () => {
     if (!markDraft) return
-    await fetch("/api/marks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        slug: book.slug,
-        page,
-        csvPage: page - book.pageOffset,
-        text: markDraft.text || undefined,
-        note: markDraft.note.trim() || undefined,
-      }),
-    }).catch(() => {})
+    await saveMarkRecord({
+      page: markDraft.page,
+      text: markDraft.text || undefined,
+      note: markDraft.note.trim() || undefined,
+      color: markDraft.color,
+      rects: markDraft.rects,
+    })
+    pendingSel?.clear()
+    setPendingSel(null)
     setMarkDraft(null)
-    loadMarks()
-    showToast(`已标记 p.${page}`)
+    showToast(`已标记 p.${markDraft.page}`)
   }
 
   const deleteMark = async (id: string) => {
@@ -336,6 +434,71 @@ function Reader({
             showDownload={false}
             onActivePageChange={onActivePageChange}
             onDocumentLoadSuccess={setNumPages}
+            onSelectionEnd={onSelectionEnd}
+            renderPageOverlay={({ pageNumber, scale }: PDFViewerPageOverlayProps) => {
+              const pageIndex = pageNumber - 1
+              const hl: React.ReactNode[] = []
+              for (const m of marks) {
+                for (const pr of m.rects ?? []) {
+                  if (pr.pageIndex !== pageIndex) continue
+                  pr.rects.forEach((r, i) =>
+                    hl.push(
+                      <div
+                        key={`${m.id}-${pr.pageIndex}-${i}`}
+                        className="pointer-events-none absolute"
+                        style={{
+                          left: r.origin.x * scale,
+                          top: r.origin.y * scale,
+                          width: r.size.width * scale,
+                          height: r.size.height * scale,
+                          background: HIGHLIGHT_FILL[m.color ?? "yellow"],
+                          mixBlendMode: "multiply",
+                        }}
+                      />
+                    )
+                  )
+                }
+              }
+              const tail = pendingSel?.pages[pendingSel.pages.length - 1]
+              const showBar = tail && tail.pageIndex === pageIndex && !markDraft
+              return (
+                <>
+                  {hl}
+                  {showBar && (
+                    <div
+                      className="absolute z-30 flex items-center gap-1.5 rounded-lg border bg-popover p-1.5 shadow-md"
+                      style={{
+                        left:
+                          (tail.rect.origin.x + tail.rect.size.width / 2) *
+                          scale,
+                        top:
+                          (tail.rect.origin.y + tail.rect.size.height) * scale +
+                          8,
+                        transform: "translateX(-50%)",
+                      }}
+                      onPointerDown={(e: React.PointerEvent) =>
+                        e.stopPropagation()
+                      }
+                    >
+                      {MARK_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => highlightSel(c)}
+                          className={`size-5 rounded-full border border-black/15 transition-transform hover:scale-115 ${COLOR_DOT[c]}`}
+                        />
+                      ))}
+                      <div className="mx-0.5 h-4 w-px bg-border" />
+                      <button
+                        onClick={openMarkDraft}
+                        className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </>
+              )
+            }}
           />
         </div>
         <Separator orientation="vertical" />
@@ -406,6 +569,11 @@ function Reader({
                       className="group relative rounded-lg border bg-card p-3 shadow-xs"
                     >
                       <div className="flex items-center gap-2">
+                        {m.color && (
+                          <span
+                            className={`size-2.5 flex-none rounded-full ${COLOR_DOT[m.color]}`}
+                          />
+                        )}
                         <button
                           className="text-[11px] text-muted-foreground hover:text-primary"
                           onClick={() => goTo(m.page)}
@@ -519,7 +687,24 @@ function Reader({
 
       {markDraft && (
         <div className="fixed top-16 right-6 z-50 w-80 rounded-xl border bg-popover p-3 shadow-lg">
-          <div className="mb-2 text-[13px] font-semibold">标记 p.{page}</div>
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-[13px] font-semibold">
+              标记 p.{markDraft.page}
+            </span>
+            <div className="ml-auto flex items-center gap-1.5">
+              {MARK_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setMarkDraft({ ...markDraft, color: c })}
+                  className={`size-4.5 rounded-full border transition-transform hover:scale-110 ${COLOR_DOT[c]} ${
+                    markDraft.color === c
+                      ? "border-foreground ring-1 ring-foreground"
+                      : "border-black/15"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
           {markDraft.text ? (
             <div className="mb-2 max-h-24 overflow-y-auto border-l-2 pl-2 text-xs leading-relaxed text-muted-foreground italic">
               {markDraft.text}

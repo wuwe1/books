@@ -5,7 +5,7 @@
 - `data/<slug>.pdf` — 书（整个 data/ 不进 git，绝不 push 书的内容到任何远端）；
 - `notes/<slug>.csv` — 词条表（进 git；列：`page,type,raw,translation,note`，type ∈ 生词/多义/词组/术语/难句/语法/文化，UTF-8 带 BOM）；
 - `books.json` — 书目登记（slug/title/author/pdf/notes/pageOffset；CSV 页码 + pageOffset = PDF 页码，即正文从 PDF 第 pageOffset+1 页开始）；
-- `marks/<slug>.json` — 我在阅读器里做的标记（觉得好的段落/页，含选中原文 text、备注 note、PDF 页 page、CSV 页 csvPage）；`marks/progress.json` — 各书当前读到的页。两者都进 git，是了解我阅读情况的第一手材料：开始工作前先看 progress 和最近的标记；
+- `marks/<slug>.json` — 我在阅读器里做的高亮/标记（含选中原文 text、备注 note、颜色 color（yellow/green/red）、PDF 页 page、CSV 页 csvPage、页内坐标 rects）；`marks/progress.json` — 各书当前读到的页。两者都进 git，是了解我阅读情况的第一手材料：开始工作前先看 progress 和最近的标记；
 - `app/` — 阅读器（读 books.json 自动列出所有书，无需改代码；标记/进度通过 vite dev 中间件写入 marks/）。
 
 词条 CSV 是我们的共享知识库：它记录了我不会的东西和你对我水平的认知。开始任何工作前，先读目标书的 CSV 和其他书的 CSV（水平画像是跨书共享的）。

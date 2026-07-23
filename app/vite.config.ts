@@ -73,6 +73,8 @@ function marksApi(): Plugin {
               csvPage: body.csvPage,
               text: body.text || undefined,
               note: body.note || undefined,
+              color: body.color || undefined,
+              rects: body.rects || undefined,
               createdAt: new Date().toISOString(),
             }
             marks.push(mark)

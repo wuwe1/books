@@ -131,6 +131,12 @@ export type PDFViewerScrollAreaViewportResolver = (
   container: HTMLDivElement
 ) => HTMLDivElement | null
 
+export type PDFViewerSelectionSnapshot = {
+  pages: { pageIndex: number; rect: Rect; segmentRects: Rect[] }[]
+  getText: () => Promise<string>
+  clear: () => void
+}
+
 export type PDFViewerProps = {
   className?: string
   defaultZoom?: number
@@ -145,6 +151,7 @@ export type PDFViewerProps = {
   pageClassName?: (pageNumber: number) => string | undefined
   renderPageOverlay?: (props: PDFViewerPageOverlayProps) => React.ReactNode
   onActivePageChange?: (pageNumber: number) => void
+  onSelectionEnd?: (selection: PDFViewerSelectionSnapshot | null) => void
   onDocumentLoadSuccess?: (numPages: number) => void
   onPdfUpload?: (file: File) => void
   onPagePointerDown?: (
@@ -2104,6 +2111,7 @@ type PDFViewerInnerProps = {
   pageClassName?: (pageNumber: number) => string | undefined
   renderPageOverlay?: (props: PDFViewerPageOverlayProps) => React.ReactNode
   onActivePageChange?: (pageNumber: number) => void
+  onSelectionEnd?: (selection: PDFViewerSelectionSnapshot | null) => void
   onPdfUpload?: (file: File) => void
   onPagePointerDown?: PDFViewerProps["onPagePointerDown"]
   onPagePointerMove?: PDFViewerProps["onPagePointerMove"]
@@ -2128,6 +2136,7 @@ function PDFViewerInner({
   pageClassName,
   renderPageOverlay,
   onActivePageChange,
+  onSelectionEnd,
   onPdfUpload,
   onPagePointerDown,
   onPagePointerMove,
@@ -2181,6 +2190,42 @@ function PDFViewerInner({
   React.useEffect(() => {
     if (activePage > 0) onActivePageChange?.(activePage)
   }, [activePage, onActivePageChange])
+
+  const { provides: selectionEndCapability } = useSelectionCapability()
+
+  React.useEffect(() => {
+    if (!selectionEndCapability || !onSelectionEnd) return
+
+    const scope = selectionEndCapability.forDocument(documentId)
+    const emitSelection = () => {
+      const pages =
+        scope.getFormattedSelection() as unknown as PDFViewerSelectionSnapshot["pages"]
+      if (!pages || pages.length === 0) {
+        onSelectionEnd(null)
+        return
+      }
+      onSelectionEnd({
+        pages,
+        getText: () =>
+          new Promise((resolve) => {
+            ;(scope.getSelectedText() as any).wait(
+              (text: string[] | string) =>
+                resolve(Array.isArray(text) ? text.join("\n") : String(text)),
+              () => resolve("")
+            )
+          }),
+        clear: () => scope.clear(),
+      })
+    }
+    const offEnd = scope.onEndSelection(emitSelection)
+    const offChange = scope.onSelectionChange((sel: unknown) => {
+      if (!sel) onSelectionEnd(null)
+    })
+    return () => {
+      offEnd?.()
+      offChange?.()
+    }
+  }, [selectionEndCapability, documentId, onSelectionEnd])
 
   React.useEffect(() => {
     if (activePage < 1 || numPages < 1) return
@@ -2739,6 +2784,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
       pageClassName,
       renderPageOverlay,
       onActivePageChange,
+      onSelectionEnd,
       onDocumentLoadSuccess,
       onPdfUpload,
       onPagePointerDown,
@@ -2874,6 +2920,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
             pageClassName={pageClassName}
             renderPageOverlay={renderPageOverlay}
             onActivePageChange={onActivePageChange}
+            onSelectionEnd={onSelectionEnd}
             onDocumentLoadSuccess={onDocumentLoadSuccess}
             onPdfUpload={onPdfUpload}
             onPagePointerDown={onPagePointerDown}
