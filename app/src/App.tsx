@@ -174,7 +174,7 @@ function UnderlineLayer({
                 <div
                   className="pointer-events-none absolute z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold text-white shadow-sm"
                   style={{
-                    left: s.x * scale,
+                    left: (s.x - s.height) * scale,
                     top: s.y * scale,
                     transform: "translate(-115%, -15%)",
                   }}
