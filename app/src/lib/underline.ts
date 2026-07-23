@@ -6,6 +6,19 @@ export interface UnderlineSeg {
   y: number
   width: number
   height: number
+  /** 下划线应画的 y：行内字符 tight box 底边（≈基线）中位数略下方 */
+  lineY: number
+}
+
+/** 单字符盒：loose box 用于分行，tight box（墨迹边界）用于精确画线 */
+interface CharBox {
+  x: number
+  y: number
+  width: number
+  height: number
+  bx0: number
+  bx1: number
+  bottom: number
 }
 
 interface PageTextIndex {
@@ -14,7 +27,7 @@ interface PageTextIndex {
   /** 归一化下标 → pdfium 字符下标 */
   charIdxOf: number[]
   /** pdfium 字符下标 → glyph 矩形 */
-  rects: Map<number, UnderlineSeg>
+  rects: Map<number, CharBox>
 }
 
 /**
@@ -61,7 +74,7 @@ async function buildPageTextIndex(
   const page = doc.pages[pageIndex]
   if (!page) return null
   const geo = await engine.getPageGeometry(doc, page).toPromise()
-  const rects = new Map<number, UnderlineSeg>()
+  const rects = new Map<number, CharBox>()
   let charCount = 0
   for (const run of geo.runs) {
     for (let i = 0; i < run.glyphs.length; i++) {
@@ -69,7 +82,15 @@ async function buildPageTextIndex(
       const ci = run.charStart + i
       if (ci + 1 > charCount) charCount = ci + 1
       if (g.flags !== GLYPH_EMPTY)
-        rects.set(ci, { x: g.x, y: g.y, width: g.width, height: g.height })
+        rects.set(ci, {
+          x: g.x,
+          y: g.y,
+          width: g.width,
+          height: g.height,
+          bx0: g.tightX ?? g.x,
+          bx1: (g.tightX ?? g.x) + (g.tightWidth ?? g.width),
+          bottom: (g.tightY ?? g.y) + (g.tightHeight ?? g.height),
+        })
     }
   }
   if (!charCount) return null
@@ -78,6 +99,12 @@ async function buildPageTextIndex(
     .toPromise()
   const { text: normText, map } = normalize(text ?? "")
   return { normText, charIdxOf: map, rects }
+}
+
+function median(nums: number[]): number {
+  const s = [...nums].sort((a, b) => a - b)
+  const m = s.length >> 1
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
 }
 
 /** 把一段匹配到的归一化区间按行合并成矩形 */
@@ -92,10 +119,22 @@ function groupIntoLines(
     minY = 0,
     maxY = 0,
     open = false
+  let bottoms: number[] = []
   const flush = () => {
-    if (open)
-      out.push({ x: minX, y: minY, width: maxX - minX, height: maxY - minY })
+    if (open) {
+      // 大多数字符坐在基线上：tight 底边中位数 ≈ 基线（排除 g/p/y 下伸）
+      const base = median(bottoms)
+      const gap = Math.min(Math.max((maxY - minY) * 0.06, 0.6), 2)
+      out.push({
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+        lineY: base + gap,
+      })
+    }
     open = false
+    bottoms = []
   }
   for (let n = start; n < start + len; n++) {
     const r = idx.rects.get(idx.charIdxOf[n])
@@ -103,17 +142,18 @@ function groupIntoLines(
     const sameLine = open && r.y < maxY && r.y + r.height > minY
     if (!sameLine) {
       flush()
-      minX = r.x
-      maxX = r.x + r.width
+      minX = r.bx0
+      maxX = r.bx1
       minY = r.y
       maxY = r.y + r.height
       open = true
     } else {
-      if (r.x < minX) minX = r.x
-      if (r.x + r.width > maxX) maxX = r.x + r.width
+      if (r.bx0 < minX) minX = r.bx0
+      if (r.bx1 > maxX) maxX = r.bx1
       if (r.y < minY) minY = r.y
       if (r.y + r.height > maxY) maxY = r.y + r.height
     }
+    bottoms.push(r.bottom)
   }
   flush()
   return out

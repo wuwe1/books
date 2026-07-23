@@ -102,22 +102,27 @@ function serializeSel(sel: PDFViewerSelectionSnapshot): MarkRects[] {
 
 const NO_ENTRIES: NoteEntry[] = []
 
-// 给本页有词条的原文画下划线（按 raw 在 PDF 文本里定位）
+// 给本页有词条的原文画下划线（按 raw 在 PDF 文本里定位）。
+// hover 显示词条序号（与右侧卡片编号一致），点击联动右侧卡片。
 function UnderlineLayer({
   src,
   pageNumber,
   scale,
   entries,
+  onPick,
 }: {
   src: string
   pageNumber: number
   scale: number
   entries: NoteEntry[]
+  onPick: (e: NoteEntry) => void
 }) {
-  const [segs, setSegs] = React.useState<UnderlineSeg[]>([])
+  const [segsByEntry, setSegsByEntry] = React.useState<UnderlineSeg[][]>([])
+  const [hover, setHover] = React.useState(-1)
   React.useEffect(() => {
+    setHover(-1)
     if (!entries.length) {
-      setSegs([])
+      setSegsByEntry([])
       return
     }
     let alive = true
@@ -127,7 +132,7 @@ function UnderlineLayer({
       entries.map((e) => e.raw)
     )
       .then((r) => {
-        if (alive) setSegs(r.flat())
+        if (alive) setSegsByEntry(r)
       })
       .catch(() => {})
     return () => {
@@ -136,18 +141,51 @@ function UnderlineLayer({
   }, [src, pageNumber, entries])
   return (
     <>
-      {segs.map((s, i) => (
-        <div
-          key={i}
-          className="pointer-events-none absolute"
-          style={{
-            left: s.x * scale,
-            top: (s.y + s.height) * scale - 1,
-            width: s.width * scale,
-            borderBottom: "2px dotted rgba(59, 130, 246, 0.65)",
-          }}
-        />
-      ))}
+      {segsByEntry.map((segs, ei) =>
+        segs.map((s, si) => {
+          const active = hover === ei
+          return (
+            <React.Fragment key={`${ei}-${si}`}>
+              <div
+                className="pointer-events-none absolute"
+                style={{
+                  left: s.x * scale,
+                  top: s.lineY * scale,
+                  width: s.width * scale,
+                  borderTop: active
+                    ? "2px solid rgba(59, 130, 246, 0.9)"
+                    : "2px dotted rgba(59, 130, 246, 0.65)",
+                }}
+              />
+              {/* 命中区：盖住下划线附近一窄条，便于 hover/点击而不挡选字 */}
+              <div
+                className="absolute z-10 cursor-pointer"
+                style={{
+                  left: s.x * scale - 2,
+                  top: s.lineY * scale - 3,
+                  width: s.width * scale + 4,
+                  height: 9,
+                }}
+                onMouseEnter={() => setHover(ei)}
+                onMouseLeave={() => setHover(-1)}
+                onClick={() => onPick(entries[ei])}
+              />
+              {active && si === 0 && (
+                <div
+                  className="pointer-events-none absolute z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold text-white shadow-sm"
+                  style={{
+                    left: s.x * scale,
+                    top: s.y * scale,
+                    transform: "translate(-115%, -15%)",
+                  }}
+                >
+                  {ei + 1}
+                </div>
+              )}
+            </React.Fragment>
+          )
+        })
+      )}
     </>
   )
 }
@@ -440,6 +478,23 @@ function Reader({
     return () => window.removeEventListener("keydown", onKey)
   }, [page, goTo, openMarkDraft])
 
+  // 点击 PDF 里的下划线 → 右侧对应卡片滚动到可见并闪烁
+  const [focusKey, setFocusKey] = React.useState<string | null>(null)
+  const focusTimer = React.useRef(0)
+  const pickEntry = React.useCallback((e: NoteEntry) => {
+    const k = entryKey(e)
+    setView("notes")
+    setSearch("")
+    setFocusKey(k)
+    window.clearTimeout(focusTimer.current)
+    focusTimer.current = window.setTimeout(() => setFocusKey(null), 1600)
+    window.setTimeout(() => {
+      document
+        .querySelector(`[data-ek="${CSS.escape(k)}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" })
+    }, 60)
+  }, [])
+
   // PDF 页码 → 该页要画下划线的词条（与右侧面板同一套类型/认识过滤）
   const entriesByPdfPage = React.useMemo(() => {
     const m = new Map<number, NoteEntry[]>()
@@ -578,6 +633,7 @@ function Reader({
                     pageNumber={pageNumber}
                     scale={scale}
                     entries={entriesByPdfPage.get(pageNumber) ?? NO_ENTRIES}
+                    onPick={pickEntry}
                   />
                   {hl}
                   {showBar && (
@@ -747,12 +803,22 @@ function Reader({
                 </div>
               )}
               {view === "notes" &&
-                visible.slice(0, 200).map((e) => (
+                visible.slice(0, 200).map((e, i) => (
                 <div
                   key={entryKey(e)}
-                  className="group relative rounded-lg border bg-card p-3 shadow-xs"
+                  data-ek={entryKey(e)}
+                  className={`group relative rounded-lg border bg-card p-3 shadow-xs transition-shadow ${
+                    focusKey === entryKey(e)
+                      ? "border-blue-500 ring-2 ring-blue-500/60"
+                      : ""
+                  }`}
                 >
                   <div className="flex items-start gap-2">
+                    {!q && (
+                      <span className="mt-0.5 flex-none text-[10px] font-semibold tabular-nums text-blue-500/80">
+                        {i + 1}
+                      </span>
+                    )}
                     <div
                       className={`flex-1 text-[13px] leading-snug break-words ${
                         e.type === "难句"
