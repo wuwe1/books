@@ -98,5 +98,40 @@
       }
     ],
     "createdAt": "2026-07-23T07:33:29.640Z"
+  },
+  {
+    "id": "mrxjgr0a",
+    "page": 44,
+    "csvPage": 24,
+    "text": "holds as a core premise that no instrument is inherently good or bad, and\r\ntherefore no instrument is worth always owning or perpetually shorting.",
+    "color": "yellow",
+    "rects": [
+      {
+        "pageIndex": 43,
+        "rects": [
+          {
+            "origin": {
+              "x": 54,
+              "y": 78
+            },
+            "size": {
+              "width": 324,
+              "height": 11
+            }
+          },
+          {
+            "origin": {
+              "x": 54,
+              "y": 90
+            },
+            "size": {
+              "width": 324,
+              "height": 11
+            }
+          }
+        ]
+      }
+    ],
+    "createdAt": "2026-07-23T13:20:11.194Z"
   }
 ]
