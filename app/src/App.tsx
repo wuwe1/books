@@ -149,8 +149,59 @@ function UnderlineLayer({
       alive = false
     }
   }, [src, pageNumber, entries])
+  // 命中测试走 JS 坐标比对，而不是铺一层接管指针的 DOM：
+  // 这样整段文字（而非下划线附近一窄条）都能 hover，又完全不挡 PDF 选字。
+  const rootRef = React.useRef<HTMLDivElement>(null)
+  const segsRef = React.useRef(segsByEntry)
+  segsRef.current = segsByEntry
+  const entriesRef = React.useRef(entries)
+  entriesRef.current = entries
+  React.useEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    const hitAt = (ev: MouseEvent) => {
+      const segs = segsRef.current
+      if (!segs.length) return -1
+      const r = el.getBoundingClientRect()
+      const x = (ev.clientX - r.left) / scale
+      const y = (ev.clientY - r.top) / scale
+      if (x < 0 || y < 0 || x * scale > r.width || y * scale > r.height) return -1
+      for (let ei = 0; ei < segs.length; ei++)
+        for (const s of segs[ei])
+          if (
+            x >= s.x - 1 &&
+            x <= s.x + s.width + 1 &&
+            y >= s.y - 1 &&
+            y <= s.lineY + 2
+          )
+            return ei
+      return -1
+    }
+    const onMove = (ev: MouseEvent) => setHover(hitAt(ev))
+    let down: [number, number] | null = null
+    const onDown = (ev: MouseEvent) => (down = [ev.clientX, ev.clientY])
+    const onClick = (ev: MouseEvent) => {
+      // 拖选文字的收尾 click 不算点词条（阅读器用自有选区，测不到原生 selection）
+      const moved =
+        !down ||
+        Math.abs(ev.clientX - down[0]) > 4 ||
+        Math.abs(ev.clientY - down[1]) > 4
+      if (moved) return
+      if ((ev.target as HTMLElement | null)?.closest("button")) return
+      const ei = hitAt(ev)
+      if (ei >= 0) onPick(entriesRef.current[ei])
+    }
+    window.addEventListener("mousemove", onMove, { passive: true })
+    window.addEventListener("mousedown", onDown, { passive: true })
+    window.addEventListener("click", onClick)
+    return () => {
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mousedown", onDown)
+      window.removeEventListener("click", onClick)
+    }
+  }, [scale, onPick])
   return (
-    <>
+    <div ref={rootRef} className="pointer-events-none absolute inset-0">
       {segsByEntry.map((segs, ei) =>
         segs.map((s, si) => {
           const active = hover === ei
@@ -167,19 +218,17 @@ function UnderlineLayer({
                     : "2px dotted rgba(59, 130, 246, 0.65)",
                 }}
               />
-              {/* 命中区：盖住下划线附近一窄条，便于 hover/点击而不挡选字 */}
-              <div
-                className="absolute z-10 cursor-pointer"
-                style={{
-                  left: s.x * scale - 2,
-                  top: s.lineY * scale - 3,
-                  width: s.width * scale + 4,
-                  height: 9,
-                }}
-                onMouseEnter={() => setHover(ei)}
-                onMouseLeave={() => setHover(-1)}
-                onClick={() => onPick(entries[ei])}
-              />
+              {active && (
+                <div
+                  className="pointer-events-none absolute rounded-sm bg-blue-500/10"
+                  style={{
+                    left: (s.x - 1) * scale,
+                    top: (s.y - 1) * scale,
+                    width: (s.width + 2) * scale,
+                    height: (s.lineY - s.y + 2) * scale,
+                  }}
+                />
+              )}
               {active && si === 0 && (
                 <div
                   className="pointer-events-none absolute z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold text-white shadow-sm"
@@ -196,7 +245,7 @@ function UnderlineLayer({
           )
         })
       )}
-    </>
+    </div>
   )
 }
 
