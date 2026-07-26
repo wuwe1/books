@@ -653,9 +653,6 @@ function Reader({
             {book.title}
           </div>
         )}
-        <span className="text-xs font-normal whitespace-nowrap text-muted-foreground">
-          精读词条
-        </span>
         <div className="ml-auto flex items-center gap-2">
           <Input
             value={search}
