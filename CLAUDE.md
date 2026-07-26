@@ -12,9 +12,11 @@
   （libgen 来源）。丢了可重下，不要试图绕过 ignore。
 - `notes/<slug>.csv` — 学习词条（进 git）。列：`page,type,raw,translation,note`；
   type ∈ 生词/多义/词组/术语/难句/语法/文化；UTF-8 **带 BOM**（重写文件后用
-  `printf '\xEF\xBB\xBF'` 重新加）；page 是书的正文页码（非 PDF 页码）。
+  `printf '\xEF\xBB\xBF'` 重新加）；page 是书的正文页码（非 PDF 页码），
+  前言等罗马数字页用负数（如 xi → -7，仍满足 page + pageOffset = PDF 页）。
   规则：单本书内词条不重复；note 只写客观辨析、禁止元信息；多义词标
-  "本句义 vs 常见义"；难句整句翻译并拆结构。
+  "本句义 vs 常见义"；难句整句翻译并拆结构。raw 必须逐字取自该页原文
+  （阅读器靠它在 PDF 里定位画下划线），括号补的上下文除外。
 - `marks/<slug>.json` — 读者在阅读器里的高亮/标记：`{id, page(PDF页),
   csvPage(正文页), text(选中原文), note(读者备注), color(yellow/green/red),
   rects(页内坐标), createdAt}`。
