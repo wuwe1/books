@@ -32,7 +32,6 @@ import {
   BookmarkPlus,
   Trash2,
   Pencil,
-  List,
 } from "lucide-react"
 import {
   loadBooks,
@@ -368,7 +367,7 @@ function Reader({
     []
   )
   const [toast, setToast] = React.useState("")
-  const [view, setView] = React.useState<"notes" | "marks" | "toc">("notes")
+  const [view, setView] = React.useState<"notes" | "marks">("notes")
   const [toc, setToc] = React.useState<PDFViewerBookmarkItem[]>([])
   const onBookmarksLoaded = React.useCallback(
     (items: PDFViewerBookmarkItem[]) => setToc(items),
@@ -693,6 +692,13 @@ function Reader({
             onDocumentLoadSuccess={setNumPages}
             onSelectionEnd={onSelectionEnd}
             onBookmarksLoaded={onBookmarksLoaded}
+            sidebarToc={
+              toc.length > 0 ? (
+                <div className="space-y-0.5 p-1.5">
+                  <TocList items={toc} depth={0} onJump={goTo} />
+                </div>
+              ) : undefined
+            }
             renderPageOverlay={({ pageNumber, scale }: PDFViewerPageOverlayProps) => {
               const pageIndex = pageNumber - 1
               const hl: React.ReactNode[] = []
@@ -797,18 +803,6 @@ function Reader({
                 <Bookmark className="size-3" /> 标记
                 {marks.length ? ` ${marks.length}` : ""}
               </button>
-              {toc.length > 0 && (
-                <button
-                  onClick={() => setView("toc")}
-                  className={`flex items-center gap-1 text-[13px] font-semibold transition-colors ${
-                    view === "toc"
-                      ? "text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <List className="size-3" /> 目录
-                </button>
-              )}
               <span className="ml-auto text-xs text-muted-foreground">
                 {view === "notes" && visible.length
                   ? `${visible.length} 条`
@@ -836,11 +830,6 @@ function Reader({
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-2.5 px-4 py-3">
-              {view === "toc" && (
-                <div className="-mx-1 space-y-0.5">
-                  <TocList items={toc} depth={0} onJump={goTo} />
-                </div>
-              )}
               {view === "marks" && marks.length === 0 && (
                 <div className="py-16 text-center text-[13px] text-muted-foreground">
                   还没有标记 —— 选中一段文字按 M，或点顶栏书签按钮

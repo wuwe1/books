@@ -158,6 +158,8 @@ export type PDFViewerProps = {
   showUpload?: boolean
   src?: string
   toolbarActions?: React.ReactNode
+  /** 左侧面板「目录」页的内容；不传（或书无目录）则左侧只有缩略图 */
+  sidebarToc?: React.ReactNode
   pageClassName?: (pageNumber: number) => string | undefined
   renderPageOverlay?: (props: PDFViewerPageOverlayProps) => React.ReactNode
   onActivePageChange?: (pageNumber: number) => void
@@ -2110,6 +2112,8 @@ type PDFViewerInnerProps = {
   showRotateControls: boolean
   showUpload: boolean
   toolbarActions?: React.ReactNode
+  /** 左侧面板「目录」页的内容；不传（或书无目录）则左侧只有缩略图 */
+  sidebarToc?: React.ReactNode
   pageClassName?: (pageNumber: number) => string | undefined
   renderPageOverlay?: (props: PDFViewerPageOverlayProps) => React.ReactNode
   onActivePageChange?: (pageNumber: number) => void
@@ -2136,6 +2140,7 @@ function PDFViewerInner({
   showRotateControls,
   showUpload,
   toolbarActions,
+  sidebarToc,
   pageClassName,
   renderPageOverlay,
   onActivePageChange,
@@ -2154,6 +2159,7 @@ function PDFViewerInner({
   const { provides: thumbnails } = useThumbnailCapability()
   const { plugin: thumbnailPlugin } = useThumbnailPlugin()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  const [sidebarTab, setSidebarTab] = React.useState<"pages" | "toc">("pages")
   const [isPreparingDownload, setIsPreparingDownload] = React.useState(false)
   const [pageRotationDeltas, setPageRotationDeltas] =
     React.useState<PageRotationDeltas>(() => new Map())
@@ -2180,6 +2186,8 @@ function PDFViewerInner({
   const controlsDisabled = !numPages
   const downloadDisabled = controlsDisabled || isPreparingDownload
   const thumbnailSidebarVisible = sidebarOpen && !isLoading
+  // 书没有目录时不给「目录」页，避免留一个点开是空的 tab
+  const tocTab = sidebarToc ? sidebarTab : "pages"
   const currentZoomLevel = zoomState.currentZoomLevel
   const alignedThumbnailSidebarDocumentRef = React.useRef<string | null>(null)
 
@@ -2667,22 +2675,58 @@ function PDFViewerInner({
         ) : null}
         <div className="flex h-full max-h-full min-h-0 w-full flex-1 overflow-hidden">
           <DocumentViewerThumbnailSidebar
-            closedInlineClassName={THUMBNAIL_SIDEBAR_CLOSED_CLASS}
+            closedInlineClassName={
+              tocTab === "toc" ? "-ml-64" : THUMBNAIL_SIDEBAR_CLOSED_CLASS
+            }
             inline={sidebarInline}
             open={thumbnailSidebarVisible}
-            widthClassName={THUMBNAIL_SIDEBAR_WIDTH_CLASS}
+            widthClassName={
+              tocTab === "toc" ? "w-64" : THUMBNAIL_SIDEBAR_WIDTH_CLASS
+            }
           >
             {thumbnailSidebarVisible ? (
-              <PDFViewerThumbnails
-                basePageRotations={basePageRotations}
-                documentId={documentId}
-                activePage={activePage}
-                pageCount={numPages}
-                pageRotationDeltas={pageRotationDeltas}
-                pdfDocument={pdfDocument}
-                selectedPageIndexes={selectedPageIndexes}
-                onSelectPage={selectThumbnailPage}
-              />
+              <div className="flex h-full min-h-0 flex-col">
+                {sidebarToc ? (
+                  <div className="flex flex-none gap-1 border-b p-1.5">
+                    {(["pages", "toc"] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setSidebarTab(tab)}
+                        className={cn(
+                          "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+                          tocTab === tab
+                            ? "bg-sidebar-accent text-foreground"
+                            : "text-muted-foreground hover:bg-sidebar-accent/60"
+                        )}
+                      >
+                        {tab === "pages" ? "页面" : "目录"}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div
+                  className={cn(
+                    "min-h-0 flex-1",
+                    tocTab === "toc" ? "overflow-y-auto" : "flex"
+                  )}
+                >
+                  {tocTab === "toc" ? (
+                    sidebarToc
+                  ) : (
+                    <PDFViewerThumbnails
+                      basePageRotations={basePageRotations}
+                      documentId={documentId}
+                      activePage={activePage}
+                      pageCount={numPages}
+                      pageRotationDeltas={pageRotationDeltas}
+                      pdfDocument={pdfDocument}
+                      selectedPageIndexes={selectedPageIndexes}
+                      onSelectPage={selectThumbnailPage}
+                    />
+                  )}
+                </div>
+              </div>
             ) : null}
           </DocumentViewerThumbnailSidebar>
           <PDFViewerScrollAreaViewport
@@ -2806,6 +2850,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
       showUpload = true,
       src,
       toolbarActions,
+      sidebarToc,
       pageClassName,
       renderPageOverlay,
       onActivePageChange,
@@ -2944,6 +2989,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
             showRotateControls={showRotateControls}
             showUpload={showUpload}
             toolbarActions={toolbarActions}
+            sidebarToc={sidebarToc}
             pageClassName={pageClassName}
             renderPageOverlay={renderPageOverlay}
             onActivePageChange={onActivePageChange}

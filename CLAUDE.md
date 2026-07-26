@@ -33,7 +33,8 @@
   `/api/progress`）直接写入 `marks/`。只在 dev 模式下可用（这是预期用法）。
 - ⚠ `app/src/components/extend/pdf-viewer.tsx` 是 shadcn 装入的源码，
   **手工打过补丁**（radix 兼容 ×3、onSelectionEnd、onBookmarksLoaded、
-  工具栏布局）。不要重新执行 `shadcn add @extend/pdf-viewer`，会覆盖补丁。
+  sidebarToc（左侧面板「页面/目录」切换）、工具栏布局）。
+  不要重新执行 `shadcn add @extend/pdf-viewer`，会覆盖补丁。
 - 构建校验用 `pnpm build`（含 tsc）。
 
 ## 加一本新书
