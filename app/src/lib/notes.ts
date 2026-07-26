@@ -91,3 +91,26 @@ export async function loadNotes(path: string): Promise<NoteEntry[]> {
 export function entryKey(e: NoteEntry): string {
   return `${e.page}|${e.raw}`
 }
+
+/** 目录节点，page 是 PDF 物理页 */
+export interface TocNode {
+  title: string
+  page: number
+  children: TocNode[]
+}
+
+/**
+ * 优先用 `scripts/build-toc.py` 生成的 toc/<slug>.json —— PDF 自带书签只有
+ * 「部 + 章」两级，生成的目录连正文里的 3.2.1.1 这种小节都有。
+ * 没有这个文件就返回 null，由调用方回退到 PDF 书签。
+ */
+export async function loadToc(slug: string): Promise<TocNode[] | null> {
+  try {
+    const res = await fetch(`/toc/${slug}.json`, { cache: "no-store" })
+    if (!res.ok) return null
+    const data = await res.json()
+    return Array.isArray(data) && data.length ? (data as TocNode[]) : null
+  } catch {
+    return null
+  }
+}

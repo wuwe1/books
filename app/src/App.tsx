@@ -32,16 +32,29 @@ import {
   BookmarkPlus,
   Trash2,
   Pencil,
+  List,
 } from "lucide-react"
 import {
   loadBooks,
   loadNotes,
+  loadToc,
   entryKey,
   NOTE_TYPES,
   type Book,
   type NoteEntry,
   type NoteType,
+  type TocNode,
 } from "@/lib/notes"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   findEntryUnderlines,
   readingOrder,
@@ -248,39 +261,62 @@ function UnderlineLayer({
   )
 }
 
-function TocList({
+const TOC_PANEL = "max-h-[70vh] w-80 overflow-y-auto overflow-x-hidden"
+
+function TocPageNo({ page }: { page: number }) {
+  return (
+    <span className="ml-3 shrink-0 text-[10px] tabular-nums text-muted-foreground">
+      {page}
+    </span>
+  )
+}
+
+// 目录下拉：有子节点的做成子菜单，子菜单第一项是这一节自己（点子菜单标题只会展开）
+function TocMenuItems({
   items,
-  depth,
   onJump,
 }: {
-  items: PDFViewerBookmarkItem[]
-  depth: number
+  items: TocNode[]
   onJump: (page: number) => void
 }) {
   return (
     <>
-      {items.map((item, i) => (
-        <React.Fragment key={`${depth}-${i}-${item.title}`}>
-          <button
-            disabled={item.pageNumber === null}
-            onClick={() => item.pageNumber && onJump(item.pageNumber)}
-            className={`flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-[13px] transition-colors hover:bg-muted ${
-              depth === 0 ? "font-semibold" : "text-muted-foreground"
-            }`}
-            style={{ paddingLeft: 8 + depth * 14 }}
-          >
-            <span className="min-w-0 flex-1">{item.title}</span>
-            {item.pageNumber !== null && (
-              <span className="text-[10px] tabular-nums text-muted-foreground">
-                {item.pageNumber}
+      {items.map((item, i) =>
+        item.children.length > 0 ? (
+          <DropdownMenuSub key={`${i}-${item.title}`}>
+            <DropdownMenuSubTrigger className="text-[13px]">
+              <span className="min-w-0 flex-1 whitespace-normal leading-snug">
+                {item.title}
               </span>
-            )}
-          </button>
-          {item.children.length > 0 && (
-            <TocList items={item.children} depth={depth + 1} onJump={onJump} />
-          )}
-        </React.Fragment>
-      ))}
+              <TocPageNo page={item.page} />
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className={TOC_PANEL}>
+              <DropdownMenuItem
+                className="text-[13px] font-medium"
+                onSelect={() => onJump(item.page)}
+              >
+                <span className="min-w-0 flex-1 whitespace-normal leading-snug">
+                {item.title}
+              </span>
+                <TocPageNo page={item.page} />
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <TocMenuItems items={item.children} onJump={onJump} />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : (
+          <DropdownMenuItem
+            key={`${i}-${item.title}`}
+            className="text-[13px]"
+            onSelect={() => onJump(item.page)}
+          >
+            <span className="min-w-0 flex-1 whitespace-normal leading-snug">
+                {item.title}
+              </span>
+            <TocPageNo page={item.page} />
+          </DropdownMenuItem>
+        )
+      )}
     </>
   )
 }
@@ -368,9 +404,32 @@ function Reader({
   )
   const [toast, setToast] = React.useState("")
   const [view, setView] = React.useState<"notes" | "marks">("notes")
-  const [toc, setToc] = React.useState<PDFViewerBookmarkItem[]>([])
+  // 生成的多级目录优先；没有就用 PDF 自带书签（只有部/章两级）
+  const [toc, setToc] = React.useState<TocNode[]>([])
+  const hasBuiltToc = React.useRef(false)
+  React.useEffect(() => {
+    hasBuiltToc.current = false
+    setToc([])
+    let alive = true
+    loadToc(book.slug).then((t) => {
+      if (!alive || !t) return
+      hasBuiltToc.current = true
+      setToc(t)
+    })
+    return () => {
+      alive = false
+    }
+  }, [book.slug])
   const onBookmarksLoaded = React.useCallback(
-    (items: PDFViewerBookmarkItem[]) => setToc(items),
+    (items: PDFViewerBookmarkItem[]) => {
+      if (hasBuiltToc.current) return
+      const toNode = (b: PDFViewerBookmarkItem): TocNode => ({
+        title: b.title,
+        page: b.pageNumber ?? 1,
+        children: b.children.map(toNode),
+      })
+      setToc(items.map(toNode))
+    },
     []
   )
   const [marks, setMarks] = React.useState<Mark[]>([])
@@ -653,6 +712,18 @@ function Reader({
             {book.title}
           </div>
         )}
+        {toc.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                <List className="size-3.5" /> 目录
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className={TOC_PANEL}>
+              <TocMenuItems items={toc} onJump={goTo} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <Input
             value={search}
@@ -689,13 +760,6 @@ function Reader({
             onDocumentLoadSuccess={setNumPages}
             onSelectionEnd={onSelectionEnd}
             onBookmarksLoaded={onBookmarksLoaded}
-            sidebarToc={
-              toc.length > 0 ? (
-                <div className="space-y-0.5 p-1.5">
-                  <TocList items={toc} depth={0} onJump={goTo} />
-                </div>
-              ) : undefined
-            }
             renderPageOverlay={({ pageNumber, scale }: PDFViewerPageOverlayProps) => {
               const pageIndex = pageNumber - 1
               const hl: React.ReactNode[] = []

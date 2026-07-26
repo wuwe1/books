@@ -22,25 +22,29 @@
   rects(页内坐标), createdAt}`。
 - `marks/progress.json` — 全局进度表，按 slug 键控：各书当前读到的 PDF 页。
   **开始工作前先看 progress 和最近的标记**，了解读者读到哪、在关注什么。
+- `toc/<slug>.json` — 多级目录（顶栏「目录」下拉用），`{title, page(PDF页),
+  children}` 递归。PDF 自带书签只有部/章两级，这里连正文里的 3.2.1.1 都有。
+  用 `python3 scripts/build-toc.py <slug>` 生成（依赖 poppler 的 pdftohtml，
+  靠字体区分标题与正文）。没有这个文件时 app 自动回退到 PDF 书签。
 - `app/` — 阅读器（Vite + React + shadcn + Extend UI）。
 
 ## 阅读器 app
 
 - 启动：`cd app && pnpm dev --port 8787`，或双击 `app/start.command`。
-- `app/public/` 里的 `data`、`notes`、`books.json` 是指向仓库根的软链接；
+- `app/public/` 里的 `data`、`notes`、`toc`、`books.json` 是指向仓库根的软链接；
   改 CSV / books.json 后浏览器刷新即生效，无需重启。
 - 标记与进度由 `app/vite.config.ts` 里的 dev 中间件（`/api/marks`、
   `/api/progress`）直接写入 `marks/`。只在 dev 模式下可用（这是预期用法）。
 - ⚠ `app/src/components/extend/pdf-viewer.tsx` 是 shadcn 装入的源码，
   **手工打过补丁**（radix 兼容 ×3、onSelectionEnd、onBookmarksLoaded、
-  sidebarToc（左侧面板「页面/目录」切换）、工具栏布局）。
-  不要重新执行 `shadcn add @extend/pdf-viewer`，会覆盖补丁。
+  工具栏布局）。不要重新执行 `shadcn add @extend/pdf-viewer`，会覆盖补丁。
 - 构建校验用 `pnpm build`（含 tsc）。
 
 ## 加一本新书
 
 1. 书放 `data/<slug>.pdf`（slug 小写连字符），确认正文页与 PDF 页的偏移；
-2. 在 `books.json` 登记一条（app 自动出现书籍切换器，零代码改动）；
+2. 在 `books.json` 登记一条（app 自动出现书籍切换器，零代码改动），
+   跑 `python3 scripts/build-toc.py <slug>` 生成多级目录；
 3. 按 `prompt.md` 流程产出 `notes/<slug>.csv`（读者水平画像已在 prompt.md，
    跨书通用；量大可拆页区间并行提取后按词元去重合并）；
 4. git commit。
