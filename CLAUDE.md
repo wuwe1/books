@@ -23,9 +23,13 @@
 - `marks/progress.json` — 全局进度表，按 slug 键控：各书当前读到的 PDF 页。
   **开始工作前先看 progress 和最近的标记**，了解读者读到哪、在关注什么。
 - `toc/<slug>.json` — 多级目录（顶栏「目录」下拉用），`{title, page(PDF页),
-  children}` 递归。PDF 自带书签只有部/章两级，这里连正文里的 3.2.1.1 都有。
-  用 `python3 scripts/build-toc.py <slug>` 生成（依赖 poppler 的 pdftohtml，
-  靠字体区分标题与正文）。没有这个文件时 app 自动回退到 PDF 书签。
+  children}` 递归。用 `python3 scripts/build-toc.py <slug>` 生成，
+  `--pdf <路径>` 可先试跑不落盘。**没有这个文件时 app 自动回退到 PDF 书签**，
+  所以生成失败不影响使用；结果太差脚本会拒绝落盘并提示手写。
+  脚本每次会打印一份体检报告，**接手新书时先看这几行**：
+  正文样式、推定的 pageOffset、走了哪条路、以及与书里印的目录页比对上多少条
+  （低于一半会警告）。「⚠ 偏移不恒定」意味着这本 PDF 中间被增删过页，
+  固定 pageOffset 不成立，CSV 页码会对不上——换一版 PDF 或手写目录。
 - `app/` — 阅读器（Vite + React + shadcn + Extend UI）。
 
 ## 阅读器 app
@@ -42,9 +46,11 @@
 
 ## 加一本新书
 
-1. 书放 `data/<slug>.pdf`（slug 小写连字符），确认正文页与 PDF 页的偏移；
+1. 书放 `data/<slug>.pdf`（slug 小写连字符）。先跑
+   `python3 scripts/build-toc.py --pdf data/<slug>.pdf` 体检：它会顺带推定
+   pageOffset，比手数页数可靠；
 2. 在 `books.json` 登记一条（app 自动出现书籍切换器，零代码改动），
-   跑 `python3 scripts/build-toc.py <slug>` 生成多级目录；
+   再跑 `python3 scripts/build-toc.py <slug>` 落盘目录；
 3. 按 `prompt.md` 流程产出 `notes/<slug>.csv`（读者水平画像已在 prompt.md，
    跨书通用；量大可拆页区间并行提取后按词元去重合并）；
 4. git commit。
